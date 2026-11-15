@@ -1,11 +1,11 @@
 # server/main.py
 from collections import defaultdict
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
 import db
+from middleware import configure_middleware
 
 app = FastAPI()
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
+configure_middleware(app)
 
 rooms: dict[str, set[WebSocket]] = defaultdict(set)
 
