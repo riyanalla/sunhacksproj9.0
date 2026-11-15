@@ -6,6 +6,7 @@ recognizer, so it runs in seconds without Whisper.
 
 import sys
 import types
+import uuid
 
 import pytest
 from bson import ObjectId
@@ -18,6 +19,7 @@ class FakeDB(types.ModuleType):
 
     def reset(self):
         self.sessions, self.segments, self.slides = [], {}, {}
+        self.users, self.auth_sessions = {}, {}
 
     def create_session(self, title=None):
         sid = str(ObjectId())
@@ -52,6 +54,32 @@ class FakeDB(types.ModuleType):
     def search(self, q, sid=None):
         return []
 
+    def authenticate_user(self, identifier, password):
+        user = self.users.get(identifier.strip().lower())
+        if user and user["password"] == password:
+            return {k: user[k] for k in ("id", "username", "email", "xp", "level")}
+        return None
+
+    def create_auth_session(self, user_id):
+        token = str(uuid.uuid4())
+        self.auth_sessions[token] = user_id
+        return token
+
+    def get_user_for_auth_session(self, token):
+        user_id = self.auth_sessions.get(token)
+        return next(
+            ({k: user[k] for k in ("id", "username", "email", "xp", "level")}
+             for user in self.users.values() if user["id"] == user_id),
+            None,
+        )
+
+    def save_user_progress(self, user_id, xp):
+        user = next((user for user in self.users.values() if user["id"] == user_id), None)
+        if not user:
+            return None
+        user["xp"], user["level"] = xp, xp // 50 + 1
+        return {"xp": user["xp"], "level": user["level"]}
+
 
 fake_db = FakeDB()
 sys.modules["db"] = fake_db  # before main imports it
@@ -75,6 +103,7 @@ def clean():
     fake_db.reset()
     main.lecture_started.clear()
     main.rooms.clear()
+    client.cookies.clear()
 
 
 class FakeStream:
@@ -97,6 +126,24 @@ class FakeStream:
 def test_serves_the_page():
     r = client.get("/")
     assert r.status_code == 200 and "LevelUp Live" in r.text
+
+
+def test_signin_verifies_credentials_from_database():
+    fake_db.users["ada@example.com"] = {
+        "id": "user-1", "username": "ada", "email": "ada@example.com",
+        "password": "correct", "xp": 0, "level": 1,
+    }
+    assert client.get("/signin").status_code == 200
+    signin = client.post("/auth/signin", json={
+        "identifier": "ADA@EXAMPLE.COM", "password": "correct"
+    })
+    assert signin.json()["user"]["username"] == "ada"
+    assert client.get("/auth/me").json()["xp"] == 0
+    assert client.post("/auth/progress", json={"xp": 75}).json() == {"xp": 75, "level": 2}
+    assert client.get("/auth/me").json()["level"] == 2
+    assert client.post("/auth/signin", json={
+        "identifier": "ada@example.com", "password": "wrong"
+    }).status_code == 401
 
 
 def test_create_session_and_latest():

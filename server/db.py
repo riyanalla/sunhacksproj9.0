@@ -1,27 +1,28 @@
 import os
 import unittest
-from datetime import datetime, timezone
+import hashlib
+import hmac
+import secrets
+from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 
 from bson import ObjectId
 from pymongo import ASCENDING, MongoClient
 
-MONGODB_URI = "mongodb+srv://eobane_db_user:bMYuKjr9sP0X1cjP@cluster0.eolnuma.mongodb.net"
 MONGODB_DATABASE = "lecture_app"
-
+MONGODB_URI =  "mongodb+srv://eobane_db_user:bMYuKjr9sP0X1cjP@cluster0.eolnuma.mongodb.net"
 # Environment variables override the defaults so each deployment can select
 # its own MongoDB cluster and database without changing the application code.
 
 # Read connection settings from environment variables so credentials stay out
 # of the source code.
-_mongo_uri = os.getenv("MONGODB_URI", MONGODB_URI)
-if not _mongo_uri:
-    raise RuntimeError("MONGODB_URI must be set before starting the server")
+_mongo_uri = MONGODB_URI
 
 # Connect to the database and select the collections used by this module.
 _client = MongoClient(_mongo_uri)
 _database = _client[os.getenv("MONGODB_DATABASE", MONGODB_DATABASE)]
 _users = _database["users"]
+_auth_sessions = _database["auth_sessions"]
 _sessions = _database["sessions"]
 _segments = _database["transcript_segments"]
 _slides = _database["slides"]
@@ -41,6 +42,98 @@ _segments.create_index(
 _segments.create_index([("session_id", ASCENDING), ("start_ms", ASCENDING)])
 _segments.create_index([("text", "text")])
 _slides.create_index([("session_id", ASCENDING)])
+_auth_sessions.create_index("expires_at", expireAfterSeconds=0)
+
+
+def verify_password(password: str, encoded_hash: str) -> bool:
+    """Verify a password stored as pbkdf2_sha256$iterations$salt$digest."""
+    try:
+        algorithm, iterations, salt, digest = encoded_hash.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        derived = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), salt.encode(), int(iterations)
+        )
+        return hmac.compare_digest(derived.hex(), digest)
+    except (AttributeError, ValueError):
+        return False
+
+
+def authenticate_user(identifier: str, password: str) -> dict | None:
+    """Return a safe user summary when the identifier and password match."""
+    identifier = identifier.strip().lower()
+    if not identifier or not password:
+        return None
+    user = _users.find_one(
+        {"$or": [{"username": identifier}, {"email": identifier}]},
+        {"_id": 1, "username": 1, "email": 1, "password_hash": 1},
+    )
+    if not user or not verify_password(password, user.get("password_hash", "")):
+        return None
+    return {
+        "id": str(user["_id"]),
+        "username": user.get("username") or user.get("email") or identifier,
+        "email": user.get("email"),
+        "xp": int(user.get("xp", 0)),
+        "level": int(user.get("level", 1)),
+    }
+
+
+def encode_password(password: str, iterations: int = 310_000) -> str:
+    """Create the password format expected by authenticate_user."""
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), iterations
+    ).hex()
+    return f"pbkdf2_sha256${iterations}${salt}${digest}"
+
+
+def create_auth_session(user_id: str) -> str:
+    """Create an opaque session token for an authenticated user."""
+    if not ObjectId.is_valid(user_id):
+        raise ValueError("user_id must be a valid MongoDB ObjectId")
+    token = secrets.token_urlsafe(32)
+    _auth_sessions.insert_one({
+        "_id": token,
+        "user_id": ObjectId(user_id),
+        "created_at": datetime.now(timezone.utc),
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=7),
+    })
+    return token
+
+
+def get_user_for_auth_session(token: str) -> dict | None:
+    """Return the public user profile associated with a session token."""
+    session = _auth_sessions.find_one({"_id": token})
+    if not session:
+        return None
+    user = _users.find_one(
+        {"_id": session["user_id"]},
+        {"_id": 1, "username": 1, "email": 1, "xp": 1, "level": 1},
+    )
+    if not user:
+        return None
+    return {
+        "id": str(user["_id"]),
+        "username": user.get("username") or user.get("email"),
+        "email": user.get("email"),
+        "xp": int(user.get("xp", 0)),
+        "level": int(user.get("level", 1)),
+    }
+
+
+def save_user_progress(user_id: str, xp: int) -> dict | None:
+    """Persist XP and the level derived from it, returning the saved values."""
+    if not ObjectId.is_valid(user_id) or xp < 0:
+        raise ValueError("invalid user progress")
+    level = xp // 50 + 1
+    result = _users.update_one(
+        {"_id": ObjectId(user_id)},
+        {"$set": {"xp": xp, "level": level}},
+    )
+    if not result.matched_count:
+        return None
+    return {"xp": xp, "level": level}
 
 
 def _session_object_id(session_id: str) -> ObjectId:

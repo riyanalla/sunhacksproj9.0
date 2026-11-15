@@ -223,7 +223,7 @@
 <dialog id="garden">
   <h3>Your garden</h3><div id="gplant"></div>
   <p id="glevel" class="gcenter"></p><div id="gbarwrap"><div id="gbar"></div></div><p id="gtext" class="gcenter"></p>
-  <p class="gnote">Your plant grows as you earn XP from quizzes. Your XP is saved on this device only.</p>
+  <p class="gnote">Your plant grows as you earn XP from quizzes. Sign in to save your XP across devices.</p>
   <div class="qrow"><button id="gclose">Close</button></div>
 </dialog>
 
@@ -533,7 +533,7 @@ $("snext").onclick = () => { if (si < mySlides.length - 1) { si++; drawMySlide()
 $("slidesbtn").onclick = () => { if (!hasSlide) picker.click(); else { slidesOn = !slidesOn; showSlides(); } };
 
 /* ===== XP + plant (stored on this device only) ===== */
-let xp = +store.get("hmo-xp") || 0, streak = 0, lastQ = null;
+let xp = +store.get("hmo-xp") || 0, streak = 0, lastQ = null, signedIn = false;
 const LEVEL = 50, MAXSTAGE = 7;
 const lvl = () => Math.floor(xp / LEVEL) + 1, stageOf = () => Math.min(MAXSTAGE, Math.floor(xp / LEVEL));
 function plantSVG(stage) {
@@ -554,7 +554,21 @@ function plantSVG(stage) {
   return `<svg viewBox="0 0 120 160" aria-hidden="true">${g}</svg>`;
 }
 function showXP() { $("xpn").textContent = xp + " XP"; $("miniplant").innerHTML = plantSVG(stageOf()); }
-function addXP(n) { const before = lvl(); xp += n; store.set("hmo-xp", xp); showXP(); return lvl() > before; }
+function persistXP() {
+  if (!signedIn) return;
+  fetch("/auth/progress", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ xp })
+  }).then(async r => {
+    if (!r.ok) throw new Error((await r.text()) || `HTTP ${r.status}`);
+  }).catch(err => console.error("Could not save XP:", err));
+}
+function addXP(n) {
+  const before = lvl();
+  xp += n; store.set("hmo-xp", xp); showXP(); persistXP();
+  return lvl() > before;
+}
 $("xpchip").onclick = () => {
   const into = xp % LEVEL;
   $("gplant").innerHTML = plantSVG(stageOf()); $("glevel").textContent = "Level " + lvl();
@@ -564,6 +578,11 @@ $("xpchip").onclick = () => {
 };
 $("gclose").onclick = () => $("garden").close();
 showXP();
+fetch("/auth/me").then(async r => {
+  if (!r.ok) return;
+  const user = await r.json();
+  signedIn = true; xp = user.xp; store.set("hmo-xp", xp); showXP();
+}).catch(() => {});
 
 /* ===== Quiz me: only on request, only from the last 30 seconds of captions =====
    makeQuestion() runs here in the page so the demo works alone. A server/LLM can replace it later:

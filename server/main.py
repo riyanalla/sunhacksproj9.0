@@ -9,7 +9,7 @@ from collections import defaultdict
 from pathlib import Path
 
 from bson import ObjectId
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
@@ -49,6 +49,59 @@ _background: set = set()  # running translation tasks (kept so they aren't garba
 def index():
     # The page uses relative URLs, so it must be served by this server.
     return FileResponse(ROOT / "index.html")
+
+
+@app.get("/signin")
+def signin_page():
+    return FileResponse(ROOT / "signin.html")
+
+
+@app.post("/auth/signin")
+def signin(body: dict, response: Response):
+    identifier = body.get("identifier")
+    password = body.get("password")
+    if not isinstance(identifier, str) or not isinstance(password, str):
+        raise HTTPException(status_code=400, detail="identifier and password are required")
+    user = db.authenticate_user(identifier, password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid username/email or password")
+    response.set_cookie(
+        "levelup_session",
+        db.create_auth_session(user["id"]),
+        httponly=True,
+        samesite="lax",
+        max_age=7 * 24 * 60 * 60,
+        path="/",
+    )
+    return {"ok": True, "user": user}
+
+
+def current_user(request: Request) -> dict:
+    token = request.cookies.get("levelup_session")
+    user = db.get_user_for_auth_session(token) if token else None
+    if user is None:
+        raise HTTPException(status_code=401, detail="Sign in required")
+    return user
+
+
+@app.get("/auth/me")
+def auth_me(request: Request):
+    return current_user(request)
+
+
+@app.post("/auth/progress")
+def save_progress(body: dict, request: Request):
+    user = current_user(request)
+    xp = body.get("xp")
+    if isinstance(xp, bool) or not isinstance(xp, int) or xp < 0:
+        raise HTTPException(status_code=422, detail="xp must be a non-negative integer")
+    try:
+        saved = db.save_user_progress(user["id"], xp)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if saved is None:
+        raise HTTPException(status_code=404, detail="user not found")
+    return saved
 
 
 # Optional mascot art and fonts that index.html looks for next to itself (if present;
