@@ -7,6 +7,9 @@ conn.execute("""CREATE TABLE IF NOT EXISTS segments (
     text TEXT, start REAL, end REAL)""")
 conn.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS segments_fts
     USING fts5(text, content='segments', content_rowid='id')""")
+conn.execute("""CREATE TABLE IF NOT EXISTS slides (
+    session_id TEXT PRIMARY KEY,
+    text TEXT NOT NULL)""")
 conn.commit()
 
 def save_segment(m):
@@ -25,6 +28,18 @@ def get_transcript(session_id):
         "SELECT segment_id, speaker, text, start, end FROM segments WHERE session_id=? ORDER BY start",
         (session_id,)).fetchall()
     return [dict(zip(["segment_id", "speaker", "text", "start", "end"], r)) for r in rows]
+
+def save_slides(session_id, text):
+    conn.execute(
+        "INSERT OR REPLACE INTO slides (session_id, text) VALUES (?, ?)",
+        (session_id, text))
+    conn.commit()
+
+def get_slides(session_id):
+    row = conn.execute(
+        "SELECT text FROM slides WHERE session_id=?",
+        (session_id,)).fetchone()
+    return row[0] if row else ""
 
 def search(q, session_id=None):
     sql = """SELECT s.session_id, s.segment_id, s.speaker, s.text, s.start, s.end

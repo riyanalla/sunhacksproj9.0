@@ -1,0 +1,591 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3F5A2E">
+<title>LevelUp Live</title>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inter:wght@400;700&family=Lexend:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* ---- Design tokens: edit colors here ---- */
+  :root {
+    --moss: #3F5A2E; --ochre: #D9A441; --accent: #3F5A2E;
+    --bg: #F3EBDD; --panel: #FBF6EA; --text: #2E2A22; --muted: #6B6354; --line: #D8CCB4;
+    --bar: #3F5A2E; --bar-text: #fff;
+    --sp0: #3F6B2F; --sp1: #A8482C; --sp2: #8A6A00; --sp3: #2F5F7A; --sp4: #6B3E62; --sp5: #1F6B63;
+    --size: 28px; --font: "Atkinson Hyperlegible", system-ui, sans-serif;
+  }
+  :root[data-theme="dark"] {
+    --accent: #E0B04A; --bg: #1D1B16; --panel: #28251E; --text: #F3EBDD; --muted: #BDB4A0; --line: #4A4436;
+    --sp0: #9ACD6A; --sp1: #E58B6A; --sp2: #E7C25A; --sp3: #7FB8D6; --sp4: #C99AC0; --sp5: #6FD1C4;
+  }
+  :root[data-contrast="high"] { --bar: #000; --accent: #000; --bg: #fff; --panel: #fff; --text: #000; --muted: #000; --line: #000; }
+  :root[data-theme="dark"][data-contrast="high"] { --accent: #fff; --bg: #000; --panel: #000; --text: #fff; --muted: #fff; --line: #fff; }
+
+  /* OpenDyslexic (free, SIL Open Font License). Put the font files in a "fonts" folder next to this file. */
+  @font-face { font-family: "OpenDyslexic"; font-weight: 400;
+    src: local("OpenDyslexic"), local("OpenDyslexic Regular"),
+         url("fonts/OpenDyslexic-Regular.woff") format("woff"), url("fonts/OpenDyslexic-Regular.otf") format("opentype"); }
+  @font-face { font-family: "OpenDyslexic"; font-weight: 700;
+    src: local("OpenDyslexic Bold"),
+         url("fonts/OpenDyslexic-Bold.woff") format("woff"), url("fonts/OpenDyslexic-Bold.otf") format("opentype"); }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); display: flex; flex-direction: column; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+    background: var(--bar); color: var(--bar-text); border-bottom: 4px solid var(--ochre);
+  }
+  .logo { width: 44px; height: 30px; flex: none; }
+  h1 { font: 700 21px Georgia, "Times New Roman", serif; margin: 0; letter-spacing: .2px; }
+  .sp { flex: 1; }
+  #status { display: flex; align-items: center; gap: 7px; font-size: 14px; }
+  #dot { width: 11px; height: 11px; border-radius: 50%; background: #c9d8b8; }
+  #status.live #dot { background: #5CE08A; }
+  #status.wait #dot { background: #D9A441; }
+  #lang { font: inherit; font-size: 15px; color: #fff; background: rgba(255,255,255,.14); border: 1.5px solid rgba(255,255,255,.6); border-radius: 8px; padding: 6px 8px; }
+  #lang option { color: #000; }
+
+  .wrap { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; }
+  .stage { display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; padding: 16px; min-height: 0; overflow: hidden; }
+  #slidebox { flex: none; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  #slidebox[hidden] { display: none; }
+  #caps { flex: 1; min-height: 0; display: flex; flex-direction: column-reverse; justify-content: flex-end; /* newest on top, older ones below */ gap: 16px; overflow: hidden; }
+  #slide { flex: 1; min-height: 0; width: 100%; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+  #slidecap { font-size: 14px; color: var(--muted); }
+  .mark { font-size: 13px; font-weight: 700; color: var(--accent); padding: 10px 0 2px; border-top: 2px solid var(--ochre); }
+  #empty { text-align: center; color: var(--muted); font-size: 20px; margin: auto; }
+
+  .line { border-left: 6px solid var(--c); padding-left: 14px; }
+  .who { font-size: calc(var(--size) * .5); font-weight: 700; color: var(--c); }
+  .old { color: var(--text); }   /* full text color; only the opacity below dims it */
+  .old .t { font-size: calc(var(--size) * .7); line-height: 1.4; }   /* all previous sentences: same size */
+  #prev1 { opacity: .75; }                                           /* second most recent */
+  #prev2, #prev3, #prev4, #prev5, #prev6 { opacity: .5; }            /* everything older */
+  :root[data-contrast="high"] #prev1, :root[data-contrast="high"] #prev2, :root[data-contrast="high"] #prev3, :root[data-contrast="high"] #prev4, :root[data-contrast="high"] #prev5, :root[data-contrast="high"] #prev6 { opacity: 1; }
+  /* No slides: captions get the whole screen, so they run larger with more history */
+  body.no-slides #cur .t { font-size: calc(var(--size) * 1.2); }
+  body.no-slides .old .t { font-size: calc(var(--size) * .85); }
+  #cur { border-left-width: 9px; }
+  #cur .t { font-size: var(--size); line-height: 1.4; letter-spacing: var(--ls, 0); }
+  @keyframes rise { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+  .orig { font-size: calc(var(--size) * .58); color: var(--muted); margin-top: 8px; }
+  .note { font-size: 14px; color: var(--muted); font-style: italic; }
+
+  /* Right-hand panel (bottom sheet on phones) that holds the transcript and the quiz, each toggled by its own button */
+  #side { display: none; flex-direction: column; justify-content: flex-end; min-height: 0; background: var(--panel); border-left: 1px solid var(--line); }
+  body.side-open #side { display: flex; }
+  #tr { display: none; flex-direction: column; flex: 1; min-height: 0; }
+  body.tr-open #tr { display: flex; }                /* transcript and quiz share one panel: only one is ever open */
+  #quiz { display: none; flex: 1; min-height: 0; overflow-y: auto; }
+  body.quiz-open #quiz { display: block; }
+  #quiz button.primary { background: var(--moss); color: #fff; border-color: var(--moss); }
+  .phead { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+  .phead h2 { margin: 0; padding: 12px 14px; font-size: 16px; }
+  #side .x { flex: none; width: 44px; height: 44px; min-height: 0; margin-right: 8px; padding: 0; text-align: center; font: inherit; font-size: 18px; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 8px; cursor: pointer; }
+  #side .x:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+  .qpad { padding: 14px; }
+  #list { flex: 1; overflow-y: auto; padding: 8px 14px 16px; }
+  .row { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 17px; line-height: 1.4; }
+  .row.partial { opacity: .65; }
+  .ts { color: var(--muted); font-size: 13px; padding-top: 3px; min-width: 38px; }
+  .rw { color: var(--c); }
+  @media (max-width: 819px) {
+    #side { position: fixed; left: 0; right: 0; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); border-top: 3px solid var(--moss); box-shadow: 0 -6px 18px rgba(0,0,0,.18); }
+    #tr { flex: none; height: 50vh; } #quiz { flex: none; max-height: 52vh; }
+  }
+  @media (min-width: 820px) { body.side-open .wrap { grid-template-columns: 1fr 360px; } }
+
+  footer { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: var(--panel); }
+  footer button { font: inherit; font-size: 15px; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 10px; padding: 8px 12px; min-height: 44px; }
+  footer button[aria-pressed="true"] { border-color: var(--accent); font-weight: 700; }
+  button:focus-visible, select:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+
+  .chip { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.14); color: #fff; border: 1.5px solid rgba(255,255,255,.6); border-radius: 999px; padding: 2px 12px 2px 6px; font: inherit; font-size: 15px; }
+  .chip svg { width: 24px; height: 32px; display: block; }
+  button.primary { background: var(--moss); color: #fff; border-color: var(--moss); }
+  #slidecap { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  #slidecap button { font: inherit; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 8px; padding: 2px 12px; min-height: 32px; }
+  dialog { border: 2px solid var(--moss); border-radius: 14px; background: var(--panel); color: var(--text); width: min(560px, 92vw); padding: 18px; font-family: inherit; }
+  dialog::backdrop { background: rgba(30,26,18,.55); }
+  dialog h3, #quiz h3 { margin: 0 0 8px; font-size: 20px; }
+  dialog button, #quiz button { font: inherit; font-size: 17px; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 10px; padding: 10px 14px; min-height: 46px; text-align: left; }
+  dialog button:focus-visible, dialog textarea:focus-visible, #quiz button:focus-visible, #quiz textarea:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+  blockquote { margin: 8px 0 14px; padding-left: 12px; border-left: 5px solid var(--ochre); font-size: 19px; line-height: 1.4; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  dialog button.right, #quiz button.right { border-color: #3F7A2E; background: rgba(63,122,46,.2); }
+  dialog button.wrong, #quiz button.wrong { border-color: #A8482C; background: rgba(168,72,44,.15); }
+  dialog textarea, #quiz textarea { width: 100%; font: inherit; font-size: 17px; padding: 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); margin-bottom: 10px; }
+  #qfb { margin: 12px 0 0; font-weight: 700; min-height: 1.4em; }
+  .gnote { color: var(--muted); font-size: 14px; margin: 10px 0 0; } .gcenter { text-align: center; margin: 8px 0; font-weight: 700; }
+  .qrow { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+  #gplant svg { width: 190px; height: 250px; display: block; margin: 0 auto; }
+  #gbarwrap { height: 14px; border-radius: 7px; background: var(--line); overflow: hidden; } #gbar { height: 100%; background: var(--moss); }
+
+    /* Loading screen */
+  #loader { position: fixed; inset: 0; z-index: 10; background: var(--moss); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; transition: opacity .35s; }
+  #loader.gone { opacity: 0; pointer-events: none; }
+  /* Remi peeking out of the ground, facing the viewer (drawn in the script, see PEEK) */
+  .peekslot { margin: 0 auto; width: 240px; height: 204px; }
+  .peekslot svg, .peekslot img { width: 100%; height: 100%; display: block; object-fit: contain; }
+  #empty .peekslot { width: 150px; height: 128px; margin-bottom: 12px; }
+  #loader .peekslot .head { animation: rise 2.6s ease-in-out infinite; }   /* only the loading screen moves */
+  @keyframes rise { 0%, 100% { transform: translateY(62px); } 40%, 60% { transform: translateY(0); } }
+  #loader h2 { margin: 0; font: 700 40px Georgia, "Times New Roman", serif; }
+  #loader p { margin: 0; font-size: 18px; color: #e5ecd9; }
+  @keyframes bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
+  @media (prefers-reduced-motion: reduce) { .peekslot .head, #cur.enter { animation: none; } #loader { transition: none; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mole" viewBox="0 0 134 90">
+    <path d="M14 60Q2 56 4 44" fill="none" stroke="#D49A8A" stroke-width="5" stroke-linecap="round"/>
+    <ellipse cx="60" cy="58" rx="44" ry="26" fill="#EBB9A4"/>
+    <path d="M40 44q6 6 0 14M58 40q6 7 0 15M76 44q6 6 0 14" fill="none" stroke="#D49A8A" stroke-width="2" stroke-linecap="round"/>
+    <ellipse cx="38" cy="82" rx="10" ry="5" fill="#D49A8A"/><ellipse cx="78" cy="82" rx="10" ry="5" fill="#D49A8A"/>
+    <ellipse cx="96" cy="50" rx="23" ry="20" fill="#F0C5B2"/>
+    <path d="M79 43Q81 30 94 30" fill="none" stroke="#D9A441" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="78" cy="48" r="5" fill="#D9A441" stroke="#3F5A2E" stroke-width="1.5"/>
+    <ellipse cx="116" cy="47" rx="5" ry="4" fill="#D98F85"/>
+    <rect x="108" y="54" width="8" height="12" rx="2.5" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/>
+    <rect x="116" y="54" width="8" height="12" rx="2.5" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/>
+    <path d="M98 42q5-4 10 0" fill="none" stroke="#4A2230" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M88 26q12-12 26-2M92 15q18-14 38 0" fill="none" stroke="#D9A441" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<div id="loader" role="status">
+  <div class="peekslot"></div>
+  <h2>LevelUp Live</h2>
+  <p>Remi is finding your lecture…</p>
+</div>
+
+<header>
+  <svg class="logo" aria-hidden="true"><use href="#mole"/></svg>
+  <h1>LevelUp Live</h1>
+  <div class="sp"></div>
+  <div id="status" role="status" aria-live="polite"><span id="dot"></span><span id="stext">Connecting…</span></div>
+  <button id="xpchip" class="chip" aria-label="Open your garden"><span id="miniplant"></span><b id="xpn">0 XP</b></button>
+  <select id="lang" aria-label="Caption language"></select>
+</header>
+
+<div class="wrap">
+  <section class="stage" id="stage">
+    <figure id="slidebox" hidden><img id="slide" alt="Current lecture slide"><figcaption id="slidecap"><button id="sprev" aria-label="Previous slide">◀</button><span id="slabel"></span><button id="snext" aria-label="Next slide">▶</button></figcaption></figure>
+    <div id="caps">
+    <div id="empty"><div class="peekslot"></div>Remi is waiting for the professor to start…</div>
+    <div class="line old" id="prev6" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev5" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev4" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev3" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev2" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev1" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line" id="cur" hidden>
+      <div class="who" id="cwho"></div><div class="t" id="cmain"></div>
+      <div class="orig" id="corig" hidden></div><div class="note" id="cnote" hidden></div>
+    </div>
+    </div>
+  </section>
+  <aside id="side">
+    <section id="tr">
+      <div class="phead"><h2>Transcript</h2><button class="x" id="trclose" aria-label="Close transcript">✕</button></div>
+      <div id="list"></div>
+    </section>
+    <section id="quiz" aria-label="Quiz">
+      <div class="phead"><h2>Quiz</h2><button class="x" id="qx" aria-label="Close quiz">✕</button></div>
+      <div class="qpad">
+        <div id="qbody"></div><p id="qfb" role="status"></p>
+        <p class="gnote">Questions come from the last 30 seconds of captions, and only when you ask. Tapped by accident? Just close it.</p>
+        <div class="qrow"><button id="qclose">Close</button><button id="qnext" class="primary" hidden>Another question</button></div>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<footer>
+  <button id="quizbtn" class="primary">Quiz me</button>
+  <button id="smaller" aria-label="Smaller text">A−</button>
+  <button id="bigger" aria-label="Larger text">A+</button>
+  <button id="fontbtn">Font</button>
+  <button id="contrast" aria-pressed="false">Contrast</button>
+  <button id="theme" aria-pressed="false">Dark</button>
+  <button id="slidesbtn" aria-pressed="false">My slides</button>
+  <button id="trbtn" aria-pressed="false">Transcript</button>
+  <button id="demo" aria-pressed="false">Demo</button>
+</footer>
+
+<dialog id="garden">
+  <h3>Your garden</h3><div id="gplant"></div>
+  <p id="glevel" class="gcenter"></p><div id="gbarwrap"><div id="gbar"></div></div><p id="gtext" class="gcenter"></p>
+  <p class="gnote">Your plant grows as you earn XP from quizzes. Your XP is saved on this device only.</p>
+  <div class="qrow"><button id="gclose">Close</button></div>
+</dialog>
+
+<script>
+const params = new URLSearchParams(location.search);
+const SESSION = params.get("s") || "lecture-1";
+const root = document.documentElement, $ = id => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
+
+/* ===== Loading screen: at least 1 s, gives up after 6 s ===== */
+const loaderStart = Date.now();
+function hideLoader() { setTimeout(() => $("loader").classList.add("gone"), Math.max(0, 1000 - (Date.now() - loaderStart))); }
+setTimeout(hideLoader, 6000);
+
+/* ===== Language (defaults to the phone's language) ===== */
+const LANGS = { en: "English", es: "Español", zh: "中文", hi: "हिन्दी", ar: "العربية", vi: "Tiếng Việt", ko: "한국어" };
+let lang = store.get("hmo-lang") || (navigator.language || "en").slice(0, 2).toLowerCase();
+if (!LANGS[lang]) lang = "en";
+$("lang").innerHTML = Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+$("lang").value = lang;
+$("lang").onchange = e => { lang = e.target.value; store.set("hmo-lang", lang); redrawAll(); };
+
+/* ===== Captions: previous sentence, current sentence, transcript ===== */
+const segs = new Map(), rows = new Map(), spk = new Map();
+let curId = null, hist = [], listStick = true;
+let hasSlide = false, slidesOn = store.get("hmo-slides") !== "0";
+const list = $("list");
+const col = n => { if (!spk.has(n)) spk.set(n, spk.size % 6); return `var(--sp${spk.get(n)})`; };
+const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+function pick(m) {                       // translated text if we have it, else English
+  const t = m.translations && m.translations[lang];
+  if (lang !== "en" && t) return { main: t, orig: m.text, note: "" };
+  return { main: m.text, orig: "", note: lang !== "en" && m.is_final ? "Showing English: translation not available" : "" };
+}
+
+function fillStage() {
+  const c = segs.get(curId);
+  document.body.classList.toggle("no-slides", $("slidebox").hidden);
+  const maxPrev = $("slidebox").hidden ? 6 : 3;          // no slides: show more history
+  [6, 5, 4, 3, 2, 1].forEach(k => {
+    const p = k <= maxPrev ? segs.get(hist[hist.length - k]) : null, el = $("prev" + k);
+    el.hidden = !p; if (!p) return;
+    el.style.setProperty("--c", col(p.speaker));
+    el.querySelector(".who").textContent = p.speaker;
+    el.querySelector(".t").textContent = pick(p).main;
+  });
+  $("cur").hidden = !c;
+  if (c) {
+    const t = pick(c);
+    $("cur").style.setProperty("--c", col(c.speaker)); $("cwho").textContent = c.speaker;
+    $("cmain").textContent = t.main;
+    $("corig").textContent = t.orig; $("corig").hidden = !t.orig;
+    $("cnote").textContent = t.note; $("cnote").hidden = !t.note;
+    $("cur").classList.toggle("partial", c.is_final === false);
+  }
+  fitStage();
+}
+
+/* Slide is as big as the screen allows (16:9, at most 55% of the height). It depends only on the
+   screen, never on caption length, so it stays still. The captions get everything left over. */
+function showSlides() {          // slide shows only if the professor has slides AND the student wants them
+  $("slidebox").hidden = !(hasSlide && slidesOn);
+  $("slidesbtn").setAttribute("aria-pressed", hasSlide && slidesOn);
+  sizeSlide(); fillStage();
+}
+function sizeSlide() {
+  if ($("slidebox").hidden) return;
+  const st = $("stage");
+  const img = Math.min(st.clientHeight * 0.55, (st.clientWidth - 32) * 9 / 16);
+  $("slidebox").style.height = Math.round(img + 40) + "px";
+}
+
+/* Show as many previous sentences as fit (up to three with a slide, six without) so nothing is cut off mid-line */
+function fitStage() {
+  const caps = $("caps");
+  const tooTall = () => {
+    const v = [...caps.children].filter(e => !e.hidden);
+    return v.reduce((a, e) => a + e.offsetHeight, 0) + 16 * Math.max(0, v.length - 1) > caps.clientHeight;
+  };
+  for (const id of ["prev6", "prev5", "prev4", "prev3", "prev2", "prev1"]) if (!$(id).hidden && tooTall()) $(id).hidden = true;
+}
+
+function fillRow(m) {
+  let r = rows.get(m.segment_id);
+  if (!r) {
+    r = document.createElement("div"); r.className = "row";
+    r.innerHTML = '<span class="ts"></span><div><b class="rw"></b> <span class="rt"></span></div>';
+    list.appendChild(r); rows.set(m.segment_id, r);
+  }
+  r.style.setProperty("--c", col(m.speaker));
+  r.querySelector(".ts").textContent = fmt(m.start);
+  r.querySelector(".rw").textContent = m.speaker;
+  r.querySelector(".rt").textContent = pick(m).main;
+  r.classList.toggle("partial", m.is_final === false);
+}
+
+function onCaption(m) {
+  const e = $("empty"); if (e) e.remove();
+  segs.set(m.segment_id, m); fillRow(m);
+  if (m.is_final !== false) finals.set(m.segment_id, { t: (finals.get(m.segment_id) || {}).t || Date.now(), m });
+  if (m.segment_id !== curId && (curId === null || m.segment_id > curId)) {
+    if (curId !== null) hist.push(curId);          // old sentence moves down
+    curId = m.segment_id;
+    const c = $("cur"); c.classList.remove("enter"); void c.offsetWidth; c.classList.add("enter");
+  }
+  fillStage();
+  if (listStick) list.scrollTop = list.scrollHeight;
+}
+
+function redrawAll() {
+  $("stage").dir = $("tr").dir = $("quiz").dir = lang === "ar" ? "rtl" : "ltr";
+  segs.forEach(fillRow); fillStage();
+}
+list.onscroll = () => { listStick = list.scrollHeight - list.scrollTop - list.clientHeight < 60; };
+
+function setStatus(kind, text) { $("status").className = kind; $("stext").textContent = text; }
+
+function onMsg(m) {
+  if (m.type === "caption") onCaption(m);
+  else if (m.type === "session_end") setStatus("wait", "Lecture ended");
+}
+
+/* ===== Live connection ===== */
+let ws, retry = 0, demoOn = false, reconnectTimer;
+function connect() {
+  if (demoOn) return;
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/captions/${SESSION}`);
+  ws.onopen = () => { retry = 0; setStatus("live", "Live"); hideLoader(); backfill(); };
+  ws.onmessage = e => { try { onMsg(JSON.parse(e.data)); } catch (_) {} };
+  ws.onclose = () => { if (demoOn) return; setStatus("wait", "Reconnecting…"); reconnectTimer = setTimeout(connect, Math.min(1000 * 2 ** retry++, 8000)); };
+  ws.onerror = () => ws.close();
+}
+async function backfill() {   // fill the transcript with anything missed
+  try {
+    const d = await (await fetch(`/sessions/${SESSION}/transcript`)).json();
+    (Array.isArray(d) ? d : d.segments || []).forEach(s => { if (!segs.has(s.segment_id)) { segs.set(s.segment_id, { is_final: true, ...s }); fillRow(segs.get(s.segment_id)); } });
+  } catch (_) {}
+}
+
+/* ===== Demo mode (no server needed). Spanish shown as the translation example ===== */
+const script = [
+  ["Speaker 1", "Welcome back, everyone. Today we're studying the naked mole-rat, one of biology's strangest mammals.", "Bienvenidos de nuevo a todos. Hoy estudiamos la rata topo desnuda, uno de los mamíferos más extraños de la biología."],
+  ["Speaker 1", "Remember that Professor Okonkwo posted the BIO 340 slides last night.", "Recuerden que el profesor Okonkwo publicó anoche las diapositivas de BIO 340."],
+  ["Speaker 2", "Sorry, what does eusocial mean?", "Perdón, ¿qué significa eusocial?"],
+  ["Speaker 1", "Good question. Like bees, they live in colonies with one queen who has nearly all the babies.", "Buena pregunta. Como las abejas, viven en colonias con una sola reina que tiene casi todas las crías."],
+  ["Speaker 3", "Is it true they almost never get cancer?", "¿Es cierto que casi nunca tienen cáncer?"],
+  ["Speaker 1", "Yes, and they can live more than thirty years, which is very long for a rodent.", "Sí, y pueden vivir más de treinta años, algo muy largo para un roedor."],
+];
+let demoTimer, demoId = 1000, t0 = Date.now();
+function runDemo() {
+  const [speaker, text, es] = script[(demoId - 1000) % script.length], id = demoId++, words = text.split(" ");
+  let i = 0;
+  const tick = () => {
+    if (!demoOn) return;
+    i += 2; const done = i >= words.length;
+    onCaption({ type: "caption", segment_id: id, speaker, is_final: done, start: (Date.now() - t0) / 1000,
+                text: words.slice(0, done ? words.length : i).join(" "), translations: done ? { es } : undefined });
+    demoTimer = setTimeout(done ? runDemo : tick, done ? 2000 : 450);
+  };
+  tick();
+}
+function setDemo(on) {
+  demoOn = on; $("demo").setAttribute("aria-pressed", on);
+  if (on && store.get("hmo-slides") === null) slidesOn = false;   // demo starts without slides; tap Slides to add them
+  clearTimeout(demoTimer); clearTimeout(reconnectTimer);
+  if (on) { if (ws) ws.close(); setStatus("wait", "Demo mode"); hideLoader(); runDemo(); }
+  else { setStatus("wait", "Connecting…"); connect(); }
+}
+$("demo").onclick = () => setDemo(!demoOn);
+
+/* ===== Reading controls ===== */
+let size = +store.get("hmo-size") || 28;
+const applySize = () => { root.style.setProperty("--size", size + "px"); store.set("hmo-size", size); fillStage(); };
+$("bigger").onclick = () => { size = Math.min(size + 4, 64); applySize(); };
+$("smaller").onclick = () => { size = Math.max(size - 4, 16); applySize(); };
+applySize();
+
+const FONTS = ["Atkinson Hyperlegible", "Lexend", "OpenDyslexic", "Inter"]; let fi = +store.get("hmo-font") || 0;
+function applyFont() { root.style.setProperty("--font", `"${FONTS[fi]}", system-ui, sans-serif`); $("fontbtn").textContent = "Font: " + FONTS[fi].split(" ")[0]; store.set("hmo-font", fi); fillStage(); }
+$("fontbtn").onclick = () => { fi = (fi + 1) % FONTS.length; applyFont(); };
+applyFont();
+
+$("contrast").onclick = e => { const on = root.dataset.contrast !== "high"; if (on) root.dataset.contrast = "high"; else delete root.dataset.contrast; e.target.setAttribute("aria-pressed", on); };
+$("theme").onclick = e => { const on = root.dataset.theme !== "dark"; if (on) root.dataset.theme = "dark"; else delete root.dataset.theme; e.target.setAttribute("aria-pressed", on); e.target.textContent = on ? "Light" : "Dark"; };
+function setTr(on) {
+  if (on) { document.body.classList.remove("quiz-open"); $("quizbtn").setAttribute("aria-pressed", false); }
+  document.body.classList.toggle("tr-open", on); $("trbtn").setAttribute("aria-pressed", on); syncSide(); }
+function syncSide() {
+  document.body.classList.toggle("side-open", document.body.classList.contains("tr-open") || document.body.classList.contains("quiz-open"));
+  sizeSlide(); fillStage();
+}
+$("trbtn").onclick = () => setTr(!document.body.classList.contains("tr-open"));
+setTr(innerWidth >= 820);
+
+
+/* ===== Keep the screen awake (needs https or localhost) ===== */
+async function keepAwake() { try { if ("wakeLock" in navigator) await navigator.wakeLock.request("screen"); } catch (_) {} }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake(); });
+keepAwake();
+
+/* ===== Student's own slides (the professor does not upload any) ===== */
+const mySlides = []; let si = 0;
+const picker = Object.assign(document.createElement("input"), { type: "file", accept: "image/*", multiple: true });
+picker.onchange = () => {
+  mySlides.length = 0;
+  [...picker.files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).forEach(f => mySlides.push(URL.createObjectURL(f)));
+  if (mySlides.length) { si = 0; hasSlide = true; slidesOn = true; drawMySlide(); }
+};
+function drawMySlide() { $("slide").src = mySlides[si]; $("slabel").textContent = `Slide ${si + 1} of ${mySlides.length}`; showSlides(); }
+$("sprev").onclick = () => { if (si > 0) { si--; drawMySlide(); } };
+$("snext").onclick = () => { if (si < mySlides.length - 1) { si++; drawMySlide(); } };
+$("slidesbtn").onclick = () => { if (!hasSlide) picker.click(); else { slidesOn = !slidesOn; showSlides(); } };
+
+/* ===== XP + plant (stored on this device only) ===== */
+let xp = +store.get("hmo-xp") || 0, streak = 0, lastQ = null;
+const LEVEL = 50, MAXSTAGE = 7;
+const lvl = () => Math.floor(xp / LEVEL) + 1, stageOf = () => Math.min(MAXSTAGE, Math.floor(xp / LEVEL));
+function plantSVG(stage) {
+  let g = '<ellipse cx="60" cy="150" rx="44" ry="9" fill="#6b4a2f"/>';
+  if (stage === 0) g += '<ellipse cx="60" cy="144" rx="7" ry="4.5" fill="#b0803f"/>';
+  else {
+    const h = 18 + stage * 15, n = Math.min(stage, 6), top = 148 - h;
+    g += `<path d="M60 148Q57 ${148 - h / 2} 60 ${top}" stroke="#4f7a3a" stroke-width="5" fill="none" stroke-linecap="round"/>`;
+    for (let i = 0; i < n; i++) {
+      const side = i % 2 ? 1 : -1, y = Math.round(140 - (i + 1) * (h - 12) / (n + 1)), x = 60 + side * 13;
+      g += `<ellipse cx="${x}" cy="${y}" rx="12" ry="6" transform="rotate(${side * -28} ${x} ${y})" fill="#6fa04b"/>`;
+    }
+    if (stage >= MAXSTAGE) {
+      for (let a = 0; a < 6; a++) g += `<circle cx="${60 + 9 * Math.cos(a * Math.PI / 3)}" cy="${top + 9 * Math.sin(a * Math.PI / 3)}" r="6" fill="#D9A441"/>`;
+      g += `<circle cx="60" cy="${top}" r="5" fill="#A8482C"/>`;
+    }
+  }
+  return `<svg viewBox="0 0 120 160" aria-hidden="true">${g}</svg>`;
+}
+function showXP() { $("xpn").textContent = xp + " XP"; $("miniplant").innerHTML = plantSVG(stageOf()); }
+function addXP(n) { const before = lvl(); xp += n; store.set("hmo-xp", xp); showXP(); return lvl() > before; }
+$("xpchip").onclick = () => {
+  const into = xp % LEVEL;
+  $("gplant").innerHTML = plantSVG(stageOf()); $("glevel").textContent = "Level " + lvl();
+  $("gbar").style.width = (stageOf() >= MAXSTAGE ? 100 : into / LEVEL * 100) + "%";
+  $("gtext").textContent = stageOf() >= MAXSTAGE ? `${xp} XP · fully bloomed` : `${xp} XP · ${LEVEL - into} XP to the next level`;
+  $("garden").showModal();
+};
+$("gclose").onclick = () => $("garden").close();
+showXP();
+
+/* ===== Quiz me: only on request, only from the last 30 seconds of captions =====
+   makeQuestion() runs here in the page so the demo works alone. A server/LLM can replace it later:
+   send windowSegs() text, get back an object shaped like the ones below. */
+const finals = new Map();            // segment_id -> { t: when it finished, m: the caption }
+const windowSegs = () => { const cut = Date.now() - 30000; return [...finals.values()].filter(f => f.t >= cut).sort((a, b) => a.t - b.t).map(f => f.m); };
+const clean = w => w.replace(/[^\p{L}\p{N}'-]/gu, "");
+const bigWords = t => [...new Set(t.split(/\s+/).map(clean).filter(w => w.length >= 6))];
+const shuffle = a => a.map(x => [Math.random(), x]).sort((u, v) => u[0] - v[0]).map(x => x[1]);
+const el = (tag, txt, cls) => { const e = document.createElement(tag); if (txt) e.textContent = txt; if (cls) e.className = cls; return e; };
+
+function makeQuestion() {
+  const all = windowSegs(); if (!all.length) return null;
+  const withWords = all.filter(m => bigWords(pick(m).main).length);
+  const m = (withWords.length ? withWords : all)[(withWords.length ? withWords : all).length - 1], text = pick(m).main;
+  const think = () => ({ kind: "think", xp: 20, prompt: "What do you think?", context: `The professor said: “${text}”`, ask: true });
+  const words = bigWords(text); if (!words.length) return think();
+  const answer = [...words].sort((a, b) => b.length - a.length)[0];
+  const pool = [...new Set([...finals.values()].flatMap(f => bigWords(pick(f.m).main)))].filter(w => w.toLowerCase() !== answer.toLowerCase());
+  const others = shuffle(pool).slice(0, 2);
+  const roll = Math.random();
+  if (lastQ && roll < .3) return { kind: "prev", xp: 15, prompt: "On the previous question, what was the answer?", context: lastQ.shown, answer: lastQ.answer, options: shuffle([lastQ.answer, ...lastQ.others]) };
+  if (others.length < 2 || roll > .75) return think();
+  return { kind: "blank", xp: 10, prompt: "What did the professor just say? Fill in the blank.", context: text.replace(answer, "_____"), answer, others, options: shuffle([answer, ...others]) };
+}
+
+let q = null;
+function renderQ() {
+  const b = $("qbody"); b.textContent = ""; $("qfb").textContent = ""; $("qnext").hidden = true;
+  if (!q) { b.append(el("p", "Not enough captions in the last 30 seconds yet. Listen a little longer, then tap Quiz me again.")); return; }
+  b.append(el("h3", q.prompt)); if (q.context) b.append(el("blockquote", q.context));
+  if (q.ask) {
+    const t = document.createElement("textarea"); t.rows = 3; t.setAttribute("aria-label", "Your answer"); t.placeholder = "Why might this matter? Say it in your own words.";
+    const go = el("button", "Submit", "primary"); go.disabled = true;
+    t.oninput = () => { go.disabled = t.value.trim().length < 12; };
+    go.onclick = () => { t.disabled = go.disabled = true; reward(q.xp, true, "Thanks for thinking it through. There's no wrong answer here."); };
+    b.append(t, go);
+  } else {
+    const box = el("div", "", "opts");
+    q.options.forEach(o => {
+      const bt = el("button", o);
+      bt.onclick = () => {
+        box.querySelectorAll("button").forEach(x => x.disabled = true);
+        const ok = o === q.answer; bt.classList.add(ok ? "right" : "wrong");
+        if (q.kind === "blank") lastQ = { shown: q.context, answer: q.answer, others: q.others };
+        reward(ok ? q.xp : 2, ok, ok ? "Correct!" : `Not quite. It was “${q.answer}”.`);
+      };
+      box.append(bt);
+    });
+    b.append(box);
+  }
+}
+function reward(base, ok, msg) {
+  streak = ok ? streak + 1 : 0;
+  const bonus = ok ? Math.min(10, (streak - 1) * 2) : 0, gain = base + bonus, grew = addXP(gain);
+  $("qfb").textContent = `${msg} +${gain} XP` + (bonus ? ` (streak bonus +${bonus})` : "") + (grew ? " · Your plant grew!" : "");
+  $("qnext").hidden = false;
+}
+function setQuiz(on) {
+  if (on) { document.body.classList.remove("tr-open"); $("trbtn").setAttribute("aria-pressed", false); }
+  document.body.classList.toggle("quiz-open", on); $("quizbtn").setAttribute("aria-pressed", on);
+  if (on) { q = makeQuestion(); renderQ(); }
+  syncSide();
+}
+$("quizbtn").onclick = () => setQuiz(!document.body.classList.contains("quiz-open"));
+$("qnext").onclick = () => { q = makeQuestion(); renderQ(); };
+$("qclose").onclick = $("qx").onclick = () => setQuiz(false);
+$("trclose").onclick = () => setTr(false);
+
+/* ===== Remi peeking out of the ground, looking at you. Inline SVG so the head can rise out of the dirt. ===== */
+const PEEK = `<svg viewBox="0 0 200 170" role="img" aria-label="Remi the naked mole-rat peeking out of the ground">
+  <g class="head">
+    <ellipse cx="100" cy="112" rx="54" ry="46" fill="#EBB9A4"/>
+    <ellipse cx="100" cy="124" rx="34" ry="30" fill="#F0C5B2"/>
+    <path d="M64 104Q74 112 66 122M136 104Q126 112 134 122M84 130Q100 136 116 130" fill="none" stroke="#D49A8A" stroke-width="2" stroke-linecap="round"/>
+    <path d="M58 98Q40 118 56 136M142 98Q160 118 144 136" fill="none" stroke="#EBB9A4" stroke-width="14" stroke-linecap="round"/>
+    <g fill="#F0C5B2" stroke="#D49A8A" stroke-width="1.5"><ellipse cx="57" cy="138" rx="13" ry="8"/><ellipse cx="143" cy="138" rx="13" ry="8"/></g>
+    <path d="M49 134v6M57 132v8M65 134v6M135 134v6M143 132v8M151 134v6" stroke="#D49A8A" stroke-width="1.5" stroke-linecap="round"/>
+    <g transform="translate(0 4)">
+      <ellipse cx="100" cy="52" rx="58" ry="40" fill="#EBB9A4"/>
+      <ellipse cx="100" cy="64" rx="34" ry="24" fill="#F0C5B2"/>
+      <path d="M78 24Q100 17 122 24M84 32Q100 27 116 32M62 38Q72 33 82 38M118 38Q128 33 138 38" fill="none" stroke="#D49A8A" stroke-width="2" stroke-linecap="round"/>
+      <circle cx="72" cy="44" r="3.8" fill="#3a1f26"/><circle cx="128" cy="44" r="3.8" fill="#3a1f26"/>
+      <circle cx="73.3" cy="42.7" r="1.2" fill="#fff"/><circle cx="129.3" cy="42.7" r="1.2" fill="#fff"/>
+      <ellipse cx="100" cy="57" rx="8" ry="5.5" fill="#D98F85"/>
+      <rect x="92" y="70" width="8" height="17" rx="3" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/>
+      <rect x="100" y="70" width="8" height="17" rx="3" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/>
+      <path d="M88 68Q100 74 112 68" fill="none" stroke="#7a3f45" stroke-width="2" stroke-linecap="round"/>
+      <path d="M72 62L50 58M72 67L48 69M128 62L150 58M128 67L152 69" stroke="#8a5a55" stroke-width="1.4" stroke-linecap="round"/>
+      <path d="M44 48Q44 28 62 22" fill="none" stroke="#D9A441" stroke-width="4" stroke-linecap="round"/>
+      <circle cx="44" cy="54" r="5.5" fill="#D9A441" stroke="#3F5A2E" stroke-width="1.5"/>
+    </g>
+  </g>
+  <path d="M0 170V146Q30 136 66 142Q100 138 134 142Q170 136 200 146V170Z" fill="#6b4a2f"/>
+  <path d="M0 170V158Q50 150 100 156Q150 150 200 158V170Z" fill="#523823"/>
+  <circle cx="28" cy="150" r="3" fill="#523823"/><circle cx="172" cy="148" r="3.5" fill="#523823"/><circle cx="118" cy="146" r="2.5" fill="#6b4a2f"/>
+</svg>`;
+document.querySelectorAll(".peekslot").forEach(n => { n.innerHTML = PEEK; });
+
+/* Your own art: images/remi.(svg|png) replaces the small header mole; images/remi-peek.(svg|png) replaces the peeking one */
+function useMascotFile(sel, files, inSlot) {
+  if (!files.length) return;
+  const im = new Image();
+  im.onload = () => document.querySelectorAll(sel).forEach(t => {
+    const el = document.createElement("img"); el.src = im.src; el.alt = ""; el.setAttribute("aria-hidden", "true"); el.style.objectFit = "contain";
+    if (inSlot) t.replaceChildren(el); else { el.className = t.getAttribute("class") || ""; t.replaceWith(el); }
+  });
+  im.onerror = () => useMascotFile(sel, files.slice(1), inSlot);
+  im.src = files[0];
+}
+useMascotFile("svg.logo", ["images/remi.svg", "images/remi.png"], false);
+useMascotFile(".peekslot", ["images/remi-peek.svg", "images/remi-peek.png"], true);
+
+addEventListener("resize", () => { sizeSlide(); fillStage(); });
+if (document.fonts) document.fonts.ready.then(fillStage);
+redrawAll();
+if (location.protocol === "file:" || location.hostname.endsWith(".github.io") || params.get("demo") === "1") setDemo(true); else connect();
+</script>
+</body>
+</html>
