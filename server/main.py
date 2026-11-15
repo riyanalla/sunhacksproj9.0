@@ -47,6 +47,23 @@ def index():
     return FileResponse(ROOT / "index.html")
 
 
+@app.get("/signin")
+def signin_page():
+    return FileResponse(ROOT / "signin.html")
+
+
+@app.post("/auth/signin")
+def signin(body: dict):
+    identifier = body.get("identifier")
+    password = body.get("password")
+    if not isinstance(identifier, str) or not isinstance(password, str):
+        raise HTTPException(status_code=400, detail="identifier and password are required")
+    user = db.authenticate_user(identifier, password)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Invalid username/email or password")
+    return {"ok": True, "user": user}
+
+
 # Optional mascot art and fonts that index.html looks for next to itself (if present;
 # without them the page falls back to its built-in drawings and fonts).
 for _folder in ("images", "fonts"):

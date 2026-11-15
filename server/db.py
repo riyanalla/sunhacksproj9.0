@@ -1,20 +1,22 @@
 import os
 import unittest
+import hashlib
+import hmac
+import secrets
 from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 from bson import ObjectId
 from pymongo import ASCENDING, MongoClient
 
-MONGODB_URI = "mongodb+srv://eobane_db_user:bMYuKjr9sP0X1cjP@cluster0.eolnuma.mongodb.net"
 MONGODB_DATABASE = "lecture_app"
-
+MONGODB_URI =  "mongodb+srv://eobane_db_user:bMYuKjr9sP0X1cjP@cluster0.eolnuma.mongodb.net"
 # Environment variables override the defaults so each deployment can select
 # its own MongoDB cluster and database without changing the application code.
 
 # Read connection settings from environment variables so credentials stay out
 # of the source code.
-_mongo_uri = os.getenv("MONGODB_URI", MONGODB_URI)
+_mongo_uri = os.getenv("MONGODB_URI")
 if not _mongo_uri:
     raise RuntimeError("MONGODB_URI must be set before starting the server")
 
@@ -41,6 +43,47 @@ _segments.create_index(
 _segments.create_index([("session_id", ASCENDING), ("start_ms", ASCENDING)])
 _segments.create_index([("text", "text")])
 _slides.create_index([("session_id", ASCENDING)])
+
+
+def verify_password(password: str, encoded_hash: str) -> bool:
+    """Verify a password stored as pbkdf2_sha256$iterations$salt$digest."""
+    try:
+        algorithm, iterations, salt, digest = encoded_hash.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        derived = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), salt.encode(), int(iterations)
+        )
+        return hmac.compare_digest(derived.hex(), digest)
+    except (AttributeError, ValueError):
+        return False
+
+
+def authenticate_user(identifier: str, password: str) -> dict | None:
+    """Return a safe user summary when the identifier and password match."""
+    identifier = identifier.strip().lower()
+    if not identifier or not password:
+        return None
+    user = _users.find_one(
+        {"$or": [{"username": identifier}, {"email": identifier}]},
+        {"_id": 1, "username": 1, "email": 1, "password_hash": 1},
+    )
+    if not user or not verify_password(password, user.get("password_hash", "")):
+        return None
+    return {
+        "id": str(user["_id"]),
+        "username": user.get("username") or user.get("email") or identifier,
+        "email": user.get("email"),
+    }
+
+
+def encode_password(password: str, iterations: int = 310_000) -> str:
+    """Create the password format expected by authenticate_user."""
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256", password.encode(), salt.encode(), iterations
+    ).hex()
+    return f"pbkdf2_sha256${iterations}${salt}${digest}"
 
 
 def _session_object_id(session_id: str) -> ObjectId:

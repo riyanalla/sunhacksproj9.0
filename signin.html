@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in - LevelUp Live</title>
+  <style>
+    :root { --moss: #3f5a2e; --bg: #f3ebdd; --panel: #fbf6ea; --text: #2e2a22; --line: #d8ccb4; }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px; background: var(--bg); color: var(--text); font: 18px system-ui, sans-serif; }
+    main { width: min(420px, 100%); padding: 32px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 8px 24px #2e2a221c; }
+    h1 { margin-top: 0; font: 700 32px Georgia, serif; }
+    p { line-height: 1.45; }
+    label { display: block; margin: 18px 0 7px; font-weight: 700; }
+    input, button { width: 100%; min-height: 48px; padding: 10px 12px; border: 2px solid var(--line); border-radius: 9px; font: inherit; }
+    input { background: white; color: var(--text); }
+    button { margin-top: 24px; background: var(--moss); color: white; border-color: var(--moss); cursor: pointer; }
+    button:disabled { opacity: .6; cursor: wait; }
+    #message { min-height: 1.5em; margin-bottom: 0; color: #a8482c; }
+    :focus-visible { outline: 3px solid #d9a441; outline-offset: 2px; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Sign in to LevelUp Live</h1>
+    <p>Use your username or email to continue.</p>
+    <form id="signin-form">
+      <label for="identifier">Username or email</label>
+      <input id="identifier" name="identifier" autocomplete="username" required>
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autocomplete="current-password" required>
+      <button id="submit" type="submit">Sign in</button>
+      <p id="message" role="alert"></p>
+    </form>
+  </main>
+  <script>
+    const form = document.querySelector("#signin-form");
+    const message = document.querySelector("#message");
+    const submit = document.querySelector("#submit");
+    form.addEventListener("submit", async event => {
+      event.preventDefault();
+      message.textContent = "";
+      submit.disabled = true;
+      try {
+        const response = await fetch("/auth/signin", {
+          method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({
+            identifier: form.identifier.value,
+            password: form.password.value
+          })
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.detail || "Sign in failed.");
+        window.location.href = "/";
+      } catch (error) {
+        message.textContent = error.message;
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
