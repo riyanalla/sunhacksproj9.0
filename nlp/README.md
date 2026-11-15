@@ -34,7 +34,8 @@ quit     exit
 ## Accuracy test (word error rate)
 
 ```
-python -m nlp.wer_test --ref nlp/scripts/course_description.txt   # read it aloud, get WER
+python -m nlp.wer_test --ref nlp/scripts/bayesian_statistics.txt  # read it aloud, get WER
+python -m nlp.wer_test --ref nlp/scripts/course_description.txt   # a second test text
 python -m nlp.wer_test                                            # or paste any text
 python -m nlp.wer_test --audio nlp/wer_runs/run_0001.wav --model tiny.en   # re-score, other settings
 python -m nlp.wer_test --history                                  # compare every run
@@ -45,13 +46,19 @@ Recordings and results are saved in `nlp/wer_runs/` (git-ignored).
 
 On a 4-core laptop CPU, reading the course description: `base` with 6 s chunks gets
 about 3-7% WER at 4-5x real time; `tiny.en` is faster but makes roughly twice the errors.
+With the laptop a few metres away (like a student's laptop in class) it's about 13% WER
+at a normal mic volume, and around 38% if the mic input volume is very low. Turn up the
+input volume in Windows sound settings first.
 
 ## How it works
 
-1. **Chunking** (`chunker.py`): audio goes to Whisper when the speaker pauses (0.5 s), or
-   after at most 6 s, cut at the quietest moment so words aren't split. Silence is skipped.
+1. **Chunking** (`chunker.py`): quiet mics are boosted to a normal speech level first
+   (`AutoGain`). Then audio goes to Whisper when the speaker pauses (0.5 s), or after at
+   most 6 s, cut at the quietest moment so words aren't split. Silence is skipped.
 2. **Transcription** (`asr.py`): Whisper gets the course vocabulary as `hotwords` and the
-   previous sentence as `initial_prompt`, so each chunk has context.
+   previous sentence as `initial_prompt`, so each chunk has context. Its output is
+   cleaned: noise and typical Whisper inventions ("Thanks for watching") are dropped,
+   and word fragments or repeated words where two chunks meet are removed.
 3. **Term fixing** (`vocab.py`): near-miss spellings ("basian", "gibs sampling") are
    corrected to the spelling in `vocab.json`.
 4. **Speaker labels** (`label.py`): pause-based guess by default; voice-based after
@@ -86,6 +93,71 @@ requests.post(f"{SERVER}/sessions/lecture-1/caption", json=caption)
   which must be in seconds since the session started.
 - **`session_start`** messages reset the speakers; pass them through `enhance` too.
 
+## Slides and lecture notes as context
+
+### To-do for teammates
+
+**Server (slide upload):** right after the upload handler extracts the text with
+`quiz.extract_slide_text(...)`, pass the same text to `nlp`. It's one extra line:
+
+```python
+from nlp.context import set_context
+
+slide_text = quiz.extract_slide_text(file)   # already there for make_quiz
+set_context(session_id, slide_text)          # new: lets captions use the slide terms
+```
+
+Use the same `session_id` as the captions for that lecture. It's fine to call this on
+every upload: repeats of the same deck are ignored.
+
+**Person 1 (ASR):** create the transcriber with the lecture's session id, so Whisper
+also hears the slide terms as hints:
+
+```python
+whisper = Transcriber("base", session_id=session_id)
+# or, if one transcriber is reused across lectures:
+whisper.set_session(session_id)
+```
+
+Keep calling `enhance(caption)` before POSTing. It already reads `session_id` from the
+caption and fixes slide terms, no change needed.
+
+**Quiz:** nothing to do. `make_quiz(transcript, slides)` gets transcript text where
+course and slide terms are already corrected.
+
+### How it works
+
+When a student uploads slides or notes, the server extracts the text (it already has
+`pypdf`) and hands it to `nlp`, once per upload:
+
+```python
+from nlp.context import set_context
+
+info = set_context(session_id, slides_text)
+# info = {"hints": ["posterior distribution", "Gibbs sampling", "ESS", ...],
+#         "fix":   ["posterior distribution", "Gibbs sampling", "ESS", ...]}
+```
+
+From the next caption on, for that `session_id`:
+
+- `enhance()` corrects near-misses of the `fix` terms, e.g. "gibs sampling" becomes
+  "Gibbs sampling". Nothing else is needed: it reads `session_id` from the caption.
+- Whisper gets the `hints` too, if the ASR uses `Transcriber(session_id=...)` (or
+  `tr.set_session(session_id)` when a new lecture starts).
+
+Only key terms are kept, not the whole deck: phrases used at least twice, names,
+acronyms, and long words used 3+ times. Whisper only reads about 220 tokens of hints, and
+weak hints like "Friday" or a course code made accuracy worse in testing. Terms already
+in `vocab.json` are skipped. Uploading the same text again (30 students, one deck) is
+ignored, and a second, different file adds to the context.
+
+Try it locally: `python -m nlp.live_test --slides notes.pdf`, or
+`python -m nlp.wer_test --audio nlp/wer_runs/run_0004.wav --slides nlp/scripts/sample_slides.txt`.
+
+Whether slides lower the WER isn't measured yet: on one short far-mic recording the
+difference was within the run-to-run noise (about 3 points). A longer recording of a
+real lecture, with its real slides, would show it.
+
 ### Optional: reuse this folder's ASR pieces
 
 `asr.Transcriber` and `chunker.PauseChunker` are the tuned Whisper settings and chunking
@@ -116,6 +188,7 @@ and call `chunker.flush()` when the session ends to caption the last few seconds
 | File | What it does |
 |---|---|
 | `enhance.py` | `enhance(caption, audio)`: the hook Person 1 calls before POSTing each caption |
+| `context.py` | `set_context(session_id, slides_text)`: key terms from uploaded slides, per lecture |
 | `vocab.json` | Course terms, acronyms, professor name, classroom words. **Edit this per course.** |
 | `vocab.py` | `build_hotwords()`, `fix_terms(text)`, `highlight_terms(text)`, `find_terms(text)` |
 | `asr.py` | `Transcriber`: the Whisper settings shared by live captions and the accuracy test |
@@ -123,7 +196,7 @@ and call `chunker.flush()` when the session ends to caption the last few seconds
 | `label.py`, `speakers.py` | Speaker labels: pause-based, or voice fingerprints (resemblyzer) |
 | `live_test.py` | Live mic captions |
 | `wer.py`, `wer_test.py` | Word error rate scoring and the accuracy test |
-| `scripts/` | Texts to read for the accuracy test |
+| `scripts/` | Texts to read for the accuracy test, and `sample_slides.txt` for `--slides` |
 | `test_*.py` | `python -m pytest nlp` |
 
 ## Tuning

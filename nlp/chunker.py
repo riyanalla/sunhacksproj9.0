@@ -3,7 +3,8 @@
 Instead of waiting for a fixed 4 s chunk, an utterance is sent to Whisper as soon as the
 speaker pauses. Silence is never sent at all. If someone talks for a long time without
 pausing, the audio is cut at the most recent short gap (between words) so words aren't
-split in half.
+split in half. Quiet mics are boosted to a normal level first (AutoGain), so a laptop
+across the room doesn't lose words to the speech detector.
 
     chunker = PauseChunker()
     for start_sample, audio in chunker.feed(samples):   # call with each mic block
@@ -23,9 +24,41 @@ FRAME_S = FRAME / SAMPLE_RATE
 CUT_SEARCH_FRAMES = 50      # forced cuts look back this far (1.5 s) for the quietest spot
 
 
+class AutoGain:
+    """Boost quiet mics (e.g. a laptop at the back of the room) to a normal speech level.
+
+    Only frames clearly louder than the background (3x the noise floor) count as speech;
+    the speech level is the 90th percentile of the last 100 of those (~3 s of talking).
+    So the gain settles within a few seconds, and holds steady through pauses instead of
+    pumping up room noise. Only ever boosts (gain >= 1): a loud enough mic is untouched.
+    """
+
+    SPEECH_FRAMES = 100  # ~3 s of speech
+    NOISE_FRAMES = 300   # ~9 s of history for the background level
+
+    def __init__(self, target_rms: float = 0.02, max_gain: float = 20.0):
+        self.target, self.max_gain = target_rms, max_gain
+        self._all: list[float] = []
+        self._speech: list[float] = []
+        self.gain = 1.0
+
+    def __call__(self, frame: np.ndarray) -> np.ndarray:
+        rms = float(np.sqrt(np.mean(frame ** 2)))
+        self._all = self._all[-(self.NOISE_FRAMES - 1):] + [rms]
+        noise = float(np.percentile(self._all, 10))
+        if len(self._all) >= 10 and rms > 3 * noise:
+            self._speech = self._speech[-(self.SPEECH_FRAMES - 1):] + [rms]
+            if len(self._speech) >= 10:
+                level = float(np.percentile(self._speech, 90))
+                self.gain = min(self.max_gain, max(1.0, self.target / max(level, 1e-6)))
+        return np.clip(frame * self.gain, -1.0, 1.0)
+
+
 class PauseChunker:
     def __init__(self, pause: float = 0.5, max_seconds: float = 6.0,
-                 min_speech: float = 0.25, preroll: float = 0.3, aggressiveness: int = 2):
+                 min_speech: float = 0.25, preroll: float = 0.3, aggressiveness: int = 2,
+                 auto_gain: bool = True):
+        self.gain = AutoGain() if auto_gain else None
         self.vad = webrtcvad.Vad(aggressiveness)
         self.end_frames = max(1, round(pause / FRAME_S))         # silence that ends an utterance
         self.max_frames = round(max_seconds / FRAME_S)           # force a cut after this long
@@ -55,6 +88,8 @@ class PauseChunker:
         return out
 
     def _frame(self, frame: np.ndarray) -> list[tuple[int, np.ndarray]]:
+        if self.gain:
+            frame = self.gain(frame)  # quiet mic: boost before the VAD and Whisper hear it
         pcm = (np.clip(frame, -1, 1) * 32767).astype(np.int16).tobytes()
         speech = self.vad.is_speech(pcm, SAMPLE_RATE)
         self._frames.append(frame)

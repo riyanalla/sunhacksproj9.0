@@ -68,11 +68,14 @@ def current_speaker(start: float | None = None) -> str:
 
 
 def label_segment(audio, text: str, start: float | None = None,
-                  end: float | None = None) -> tuple[str, str]:
-    """(speaker, fixed_text) for one Whisper segment. Never raises."""
+                  end: float | None = None, terms: tuple[str, ...] = ()) -> tuple[str, str]:
+    """(speaker, fixed_text) for one Whisper segment. Never raises.
+
+    `terms`: extra terms to correct toward, on top of vocab.json (this lecture's slides).
+    """
     global _last_speaker
     try:
-        fixed = fix_terms(text)
+        fixed = fix_terms(text, extra_terms=terms)
     except Exception:
         traceback.print_exc()
         fixed = text
@@ -86,7 +89,7 @@ def label_segment(audio, text: str, start: float | None = None,
             if _identifier is None:
                 setup()
                 if _mode == "pause":
-                    return label_segment(audio, text, start, end)
+                    return label_segment(audio, text, start, end, terms)
             speaker, _score = _identifier.identify(audio)
             if speaker is not None:  # None = too short to tell; keep previous label
                 _last_speaker = speaker

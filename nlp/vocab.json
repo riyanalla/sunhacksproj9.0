@@ -26,7 +26,13 @@
     "generalized linear model",
     "finite mixture model",
     "nonparametric",
-    "Dirichlet process"
+    "Dirichlet process",
+    "frequentist",
+    "frequentist interpretation",
+    "prior distribution",
+    "prior knowledge",
+    "degree of belief",
+    "Bayesian inference"
   ],
   "classroom": [
     "assignment",
