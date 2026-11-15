@@ -1,53 +1,104 @@
-import sqlite3
+import os
+from datetime import datetime, timezone
 
-conn = sqlite3.connect("captions.db", check_same_thread=False)
-conn.execute("""CREATE TABLE IF NOT EXISTS segments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id TEXT, segment_id INTEGER, speaker TEXT,
-    text TEXT, start REAL, end REAL)""")
-conn.execute("""CREATE VIRTUAL TABLE IF NOT EXISTS segments_fts
-    USING fts5(text, content='segments', content_rowid='id')""")
-conn.execute("""CREATE TABLE IF NOT EXISTS slides (
-    session_id TEXT PRIMARY KEY,
-    text TEXT NOT NULL)""")
-conn.commit()
+from bson import ObjectId
+from pymongo import ASCENDING, MongoClient
 
-def save_segment(m):
-    cur = conn.execute(
-        "INSERT INTO segments (session_id, segment_id, speaker, text, start, end) VALUES (?,?,?,?,?,?)",
-        (m["session_id"], m["segment_id"], m["speaker"], m["text"], m["start"], m["end"]))
-    conn.execute("INSERT INTO segments_fts(rowid, text) VALUES (?, ?)", (cur.lastrowid, m["text"]))
-    conn.commit()
 
-def list_sessions():
-    rows = conn.execute("SELECT DISTINCT session_id FROM segments").fetchall()
-    return [r[0] for r in rows]
+_mongo_uri = os.getenv("MONGODB_URI")
+if not _mongo_uri:
+    raise RuntimeError("MONGODB_URI must be set before starting the server")
 
-def get_transcript(session_id):
-    rows = conn.execute(
-        "SELECT segment_id, speaker, text, start, end FROM segments WHERE session_id=? ORDER BY start",
-        (session_id,)).fetchall()
-    return [dict(zip(["segment_id", "speaker", "text", "start", "end"], r)) for r in rows]
+_client = MongoClient(_mongo_uri)
+_database = _client[os.getenv("MONGODB_DATABASE", "lecture_app")]
+_sessions = _database["sessions"]
+_segments = _database["transcript_segments"]
 
-def save_slides(session_id, text):
-    conn.execute(
-        "INSERT OR REPLACE INTO slides (session_id, text) VALUES (?, ?)",
-        (session_id, text))
-    conn.commit()
+_segments.create_index(
+    [("session_id", ASCENDING), ("segment_id", ASCENDING)],
+    unique=True,
+)
+_segments.create_index([("session_id", ASCENDING), ("start_ms", ASCENDING)])
+_segments.create_index([("text", "text")])
 
-def get_slides(session_id):
-    row = conn.execute(
-        "SELECT text FROM slides WHERE session_id=?",
-        (session_id,)).fetchone()
-    return row[0] if row else ""
 
-def search(q, session_id=None):
-    sql = """SELECT s.session_id, s.segment_id, s.speaker, s.text, s.start, s.end
-             FROM segments_fts f JOIN segments s ON s.id = f.rowid
-             WHERE segments_fts MATCH ?"""
-    args = [q]
+def _session_object_id(session_id: str) -> ObjectId:
+    if not ObjectId.is_valid(session_id):
+        raise ValueError("session_id must be a valid MongoDB ObjectId")
+    return ObjectId(session_id)
+
+
+def save_segment(message: dict) -> None:
+    session_id = _session_object_id(message["session_id"])
+    now = datetime.now(timezone.utc)
+    start_ms = round(float(message["start"]) * 1000)
+    end_ms = round(float(message["end"]) * 1000)
+
+    _segments.update_one(
+        {"session_id": session_id, "segment_id": int(message["segment_id"])},
+        {
+            "$set": {
+                "text": message["text"],
+                "speaker": message.get("speaker"),
+                "start_ms": start_ms,
+                "end_ms": end_ms,
+            },
+            "$setOnInsert": {"created_at": now},
+        },
+        upsert=True,
+    )
+
+
+def list_sessions() -> list[str]:
+    return [str(session["_id"]) for session in _sessions.find({}, {"_id": 1})]
+
+
+def get_transcript(session_id: str) -> list[dict]:
+    object_id = _session_object_id(session_id)
+    rows = _segments.find(
+        {"session_id": object_id},
+        {"_id": 0, "segment_id": 1, "speaker": 1, "text": 1, "start_ms": 1, "end_ms": 1},
+    ).sort("start_ms", ASCENDING)
+
+    return [
+        {
+            "segment_id": row["segment_id"],
+            "speaker": row.get("speaker"),
+            "text": row["text"],
+            "start": row["start_ms"] / 1000,
+            "end": row["end_ms"] / 1000,
+        }
+        for row in rows
+    ]
+
+
+def search(query: str, session_id: str | None = None) -> list[dict]:
+    filters: dict = {"$text": {"$search": query}}
     if session_id:
-        sql += " AND s.session_id = ?"
-        args.append(session_id)
-    rows = conn.execute(sql, args).fetchall()
-    return [dict(zip(["session_id", "segment_id", "speaker", "text", "start", "end"], r)) for r in rows]
+        filters["session_id"] = _session_object_id(session_id)
+
+    rows = _segments.find(
+        filters,
+        {
+            "_id": 0,
+            "session_id": 1,
+            "segment_id": 1,
+            "speaker": 1,
+            "text": 1,
+            "start_ms": 1,
+            "end_ms": 1,
+            "score": {"$meta": "textScore"},
+        },
+    ).sort([("score", {"$meta": "textScore"})])
+
+    return [
+        {
+            "session_id": str(row["session_id"]),
+            "segment_id": row["segment_id"],
+            "speaker": row.get("speaker"),
+            "text": row["text"],
+            "start": row["start_ms"] / 1000,
+            "end": row["end_ms"] / 1000,
+        }
+        for row in rows
+    ]
