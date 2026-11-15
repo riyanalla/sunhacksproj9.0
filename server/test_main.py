@@ -18,6 +18,7 @@ class FakeDB(types.ModuleType):
 
     def reset(self):
         self.sessions, self.segments, self.slides = [], {}, {}
+        self.users = {}
 
     def create_session(self, title=None):
         sid = str(ObjectId())
@@ -51,6 +52,12 @@ class FakeDB(types.ModuleType):
 
     def search(self, q, sid=None):
         return []
+
+    def authenticate_user(self, identifier, password):
+        user = self.users.get(identifier.strip().lower())
+        if user and user["password"] == password:
+            return {"id": user["id"], "username": user["username"], "email": user["email"]}
+        return None
 
 
 fake_db = FakeDB()
@@ -97,6 +104,19 @@ class FakeStream:
 def test_serves_the_page():
     r = client.get("/")
     assert r.status_code == 200 and "LevelUp Live" in r.text
+
+
+def test_signin_verifies_credentials_from_database():
+    fake_db.users["ada@example.com"] = {
+        "id": "user-1", "username": "ada", "email": "ada@example.com", "password": "correct"
+    }
+    assert client.get("/signin").status_code == 200
+    assert client.post("/auth/signin", json={
+        "identifier": "ADA@EXAMPLE.COM", "password": "correct"
+    }).json()["user"]["username"] == "ada"
+    assert client.post("/auth/signin", json={
+        "identifier": "ada@example.com", "password": "wrong"
+    }).status_code == 401
 
 
 def test_create_session_and_latest():
