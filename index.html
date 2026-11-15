@@ -245,7 +245,9 @@ let lang = store.get("hmo-lang") || (navigator.language || "en").slice(0, 2).toL
 if (!LANGS[lang]) lang = "en";
 $("lang").innerHTML = Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 $("lang").value = lang;
-$("lang").onchange = e => { lang = e.target.value; store.set("hmo-lang", lang); redrawAll(); };
+$("lang").onchange = e => { lang = e.target.value; store.set("hmo-lang", lang); redrawAll(); sendLang(); };
+// The server translates new captions into every language someone in the lecture picked.
+function sendLang() { try { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "lang", lang })); } catch (_) {} }
 
 /* ===== Captions: previous sentence, current sentence, transcript ===== */
 const segs = new Map(), rows = new Map(), spk = new Map();
@@ -364,7 +366,7 @@ function connect() {
   if (demoOn) return;
   if (!SESSION) return findSession();
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/captions/${SESSION}`);
-  ws.onopen = () => { retry = 0; setStatus("live", "Live"); hideLoader(); backfill(); };
+  ws.onopen = () => { retry = 0; setStatus("live", "Live"); hideLoader(); backfill(); sendLang(); };
   ws.onmessage = e => { try { onMsg(JSON.parse(e.data)); } catch (_) {} };
   ws.onclose = () => { if (demoOn) return; setStatus("wait", "Reconnecting…"); reconnectTimer = setTimeout(connect, Math.min(1000 * 2 ** retry++, 8000)); };
   ws.onerror = () => ws.close();

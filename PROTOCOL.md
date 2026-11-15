@@ -33,6 +33,13 @@ message with the same `segment_id` arrives.
 
 Other `type` values: `"session_start"` and `"session_end"`, each with only `session_id`.
 
+**Translation.** The page sends `{"type": "lang", "lang": "es"}` on this socket when it
+connects and whenever the student changes the language menu. Each final caption is sent
+in English right away; if anyone in the lecture picked another language, the server then
+sends the same caption again (same `segment_id`) with
+`"translations": {"es": "...", "ko": "..."}` (one Gemini call for all languages in use).
+The page replaces it in place. Needs `GEMINI_API_KEY`; without it captions stay English.
+
 ## REST (server)
 
 | Endpoint | Does |

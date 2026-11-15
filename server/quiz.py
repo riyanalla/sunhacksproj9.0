@@ -176,6 +176,35 @@ def translate(text: str, lang: str) -> str:
     return _generate_text(prompt, max_output_tokens=500).strip()
 
 
+LANGUAGE_NAMES = {"es": "Spanish", "zh": "Simplified Chinese", "hi": "Hindi", "ar": "Arabic",
+                  "vi": "Vietnamese", "ko": "Korean", "fr": "French", "de": "German",
+                  "pt": "Portuguese", "ja": "Japanese"}
+
+
+def translate_many(text: str, langs) -> dict:
+    """One caption into several languages with one request: {"es": "...", "ko": "..."}.
+
+    Language codes are the ones the page's language menu uses. Unknown codes are skipped.
+    """
+    langs = [l for l in dict.fromkeys(langs) if l in LANGUAGE_NAMES]
+    if not langs or not isinstance(text, str) or not text.strip():
+        return {}
+    wanted = ", ".join(f'"{l}" ({LANGUAGE_NAMES[l]})' for l in langs)
+    prompt = (
+        "Translate this live lecture caption for students. Keep the meaning, keep "
+        "technical terms accurate (leave a term in English if there is no common "
+        "translation), and use natural, simple wording. Return only a JSON object whose "
+        f"keys are these language codes: {wanted}, and whose values are the translations."
+        f"\n\nCaption:\n{text}"
+    )
+    raw = _generate_text(prompt, max_output_tokens=200 + 150 * len(langs), json_response=True)
+    raw = re.sub(r"\A```(?:json)?\s*|\s*```\Z", "", raw.strip(), flags=re.IGNORECASE)
+    data = json.loads(raw)
+    if not isinstance(data, dict):
+        raise ValueError("translation response must be a JSON object")
+    return {l: data[l].strip() for l in langs if isinstance(data.get(l), str) and data[l].strip()}
+
+
 def extract_slide_text(file: str | Path | BinaryIO) -> str:
     """Extract selectable text from a PDF file or binary file object."""
     try:

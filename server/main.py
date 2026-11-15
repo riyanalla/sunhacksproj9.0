@@ -1,5 +1,6 @@
 # server/main.py
 import asyncio
+import json
 import os
 import sys
 import time
@@ -37,6 +38,9 @@ rooms: dict[str, set[WebSocket]] = defaultdict(set)
 lecture_started: dict[str, float] = {}
 # last few quiz questions per lecture, so "Another question" doesn't repeat itself
 recent_questions: dict[str, list[str]] = defaultdict(list)
+# caption language each connected page picked ("en", "es", ...), for live translation
+client_lang: dict[WebSocket, str] = {}
+_background: set = set()  # running translation tasks (kept so they aren't garbage-collected)
 
 
 # ---- Web page -----------------------------------------------------------------------
@@ -63,11 +67,47 @@ async def captions(ws: WebSocket, session_id: str):
     rooms[session_id].add(ws)
     try:
         while True:
-            # Keep the connection open while the client waits for broadcasts.
-            await ws.receive_text()
+            # The page tells us its caption language: {"type": "lang", "lang": "es"}.
+            raw = await ws.receive_text()
+            try:
+                msg = json.loads(raw)
+            except ValueError:
+                continue
+            if isinstance(msg, dict) and msg.get("type") == "lang":
+                client_lang[ws] = str(msg.get("lang") or "en")[:5]
     except WebSocketDisconnect:
+        pass
+    finally:
         # Remove disconnected clients so future broadcasts do not target them.
         rooms[session_id].discard(ws)
+        client_lang.pop(ws, None)
+
+
+def languages_in_use(session_id: str) -> set[str]:
+    """Caption languages (other than English) someone in this lecture has picked."""
+    return {client_lang.get(ws, "en") for ws in rooms[session_id]} - {"en"}
+
+
+async def _translate_and_send(session_id: str, caption: dict):
+    """Send English first (no delay), then the same caption again with translations; the
+    page replaces it in place (same segment_id)."""
+    langs = languages_in_use(session_id)
+    if not langs or not caption.get("text"):
+        return
+    try:
+        translations = await run_in_threadpool(quiz.translate_many, caption["text"], langs)
+    except Exception as exc:  # no GEMINI_API_KEY, Gemini down, ...: English still shows
+        print(f"[translate] skipped: {exc}", file=sys.stderr)
+        return
+    if translations:
+        await broadcast(session_id, {**caption, "translations": translations})
+
+
+def after_final_caption(session_id: str, caption: dict):
+    """Translate in the background so the next caption is never held up."""
+    task = asyncio.create_task(_translate_and_send(session_id, caption))
+    _background.add(task)
+    task.add_done_callback(_background.discard)
 
 async def broadcast(session_id: str, msg: dict):
     # Send the caption or lifecycle event to every client watching this session.
@@ -99,6 +139,8 @@ async def post_caption(session_id: str, msg: dict):
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
     await broadcast(session_id, msg)
+    if msg.get("type") == "caption" and msg.get("is_final"):
+        after_final_caption(session_id, msg)
     return {"ok": True}
 
 
@@ -131,6 +173,7 @@ async def _publish(session_id: str, caption: dict):
     except Exception:
         traceback.print_exc()  # still show it live even if saving failed
     await broadcast(session_id, caption)
+    after_final_caption(session_id, caption)
 
 
 async def _transcribe(queue: asyncio.Queue, stream, session_id: str):

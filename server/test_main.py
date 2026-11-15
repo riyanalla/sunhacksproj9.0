@@ -184,6 +184,41 @@ def test_quiz_without_api_key_says_so(monkeypatch):
     assert client.post(f"/sessions/{sid}/quiz").status_code == 503
 
 
+def test_captions_are_translated_for_languages_in_use(monkeypatch):
+    sid = client.post("/sessions").json()["session_id"]
+    asked = []
+
+    def fake_translate(text, langs):
+        asked.append(sorted(langs))
+        return {l: f"[{l}] {text}" for l in langs}
+
+    monkeypatch.setattr(main.quiz, "translate_many", fake_translate)
+    cap = {"type": "caption", "session_id": sid, "segment_id": 1, "speaker": "Professor",
+           "text": "Hello class", "start": 0.0, "end": 1.0, "is_final": True}
+    with client.websocket_connect(f"/ws/captions/{sid}") as phone_es, \
+            client.websocket_connect(f"/ws/captions/{sid}") as phone_en:
+        phone_es.send_text('{"type": "lang", "lang": "es"}')
+        phone_en.send_text('{"type": "lang", "lang": "en"}')
+        phone_en.send_text("not json")             # ignored, connection stays open
+        client.post(f"/sessions/{sid}/caption", json=cap)
+        first = phone_es.receive_json()
+        assert first["text"] == "Hello class" and "translations" not in first  # English, no delay
+        second = phone_es.receive_json()
+        assert second["segment_id"] == 1 and second["translations"] == {"es": "[es] Hello class"}
+    assert asked == [["es"]]                         # one call, only languages in use
+
+
+def test_no_translation_when_everyone_reads_english(monkeypatch):
+    sid = client.post("/sessions").json()["session_id"]
+    monkeypatch.setattr(main.quiz, "translate_many",
+                        lambda *a: pytest.fail("should not translate"))
+    cap = {"type": "caption", "session_id": sid, "segment_id": 1, "speaker": "Professor",
+           "text": "Hello", "start": 0.0, "end": 1.0, "is_final": True}
+    with client.websocket_connect(f"/ws/captions/{sid}") as phone:
+        client.post(f"/sessions/{sid}/caption", json=cap)
+        assert phone.receive_json()["text"] == "Hello"
+
+
 def test_recent_transcript_window():
     segs = [{"text": "old " * 50, "start": 0, "end": 10},
             {"text": "middle words here", "start": 60, "end": 65},
