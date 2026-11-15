@@ -95,6 +95,38 @@ requests.post(f"{SERVER}/sessions/lecture-1/caption", json=caption)
 
 ## Slides and lecture notes as context
 
+### To-do for teammates
+
+**Server (slide upload):** right after the upload handler extracts the text with
+`quiz.extract_slide_text(...)`, pass the same text to `nlp`. It's one extra line:
+
+```python
+from nlp.context import set_context
+
+slide_text = quiz.extract_slide_text(file)   # already there for make_quiz
+set_context(session_id, slide_text)          # new: lets captions use the slide terms
+```
+
+Use the same `session_id` as the captions for that lecture. It's fine to call this on
+every upload: repeats of the same deck are ignored.
+
+**Person 1 (ASR):** create the transcriber with the lecture's session id, so Whisper
+also hears the slide terms as hints:
+
+```python
+whisper = Transcriber("base", session_id=session_id)
+# or, if one transcriber is reused across lectures:
+whisper.set_session(session_id)
+```
+
+Keep calling `enhance(caption)` before POSTing. It already reads `session_id` from the
+caption and fixes slide terms, no change needed.
+
+**Quiz:** nothing to do. `make_quiz(transcript, slides)` gets transcript text where
+course and slide terms are already corrected.
+
+### How it works
+
 When a student uploads slides or notes, the server extracts the text (it already has
 `pypdf`) and hands it to `nlp`, once per upload:
 
