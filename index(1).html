@@ -1,0 +1,868 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#3F5A2E">
+<title>LevelUp Live</title>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Inter:wght@400;700&family=Lexend:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* ---- Design tokens: edit colors here ---- */
+  :root {
+    --moss: #3F5A2E; --ochre: #D9A441; --accent: #3F5A2E;
+    --bg: #F3EBDD; --panel: #FBF6EA; --text: #2E2A22; --muted: #6B6354; --line: #D8CCB4;
+    --bar: #3F5A2E; --bar-text: #fff;
+    --sp0: #3F6B2F; --sp1: #A8482C; --sp2: #8A6A00; --sp3: #2F5F7A; --sp4: #6B3E62; --sp5: #1F6B63;
+    --size: 28px; --font: "Atkinson Hyperlegible", system-ui, sans-serif;
+  }
+  :root[data-theme="dark"] {
+    --accent: #E0B04A; --bg: #1D1B16; --panel: #28251E; --text: #F3EBDD; --muted: #BDB4A0; --line: #4A4436;
+    --sp0: #9ACD6A; --sp1: #E58B6A; --sp2: #E7C25A; --sp3: #7FB8D6; --sp4: #C99AC0; --sp5: #6FD1C4;
+  }
+  :root[data-contrast="high"] { --bar: #000; --accent: #000; --bg: #fff; --panel: #fff; --text: #000; --muted: #000; --line: #000; }
+  :root[data-theme="dark"][data-contrast="high"] { --accent: #fff; --bg: #000; --panel: #000; --text: #fff; --muted: #fff; --line: #fff; }
+
+  /* OpenDyslexic (free, SIL Open Font License). Put the font files in a "fonts" folder next to this file. */
+  @font-face { font-family: "OpenDyslexic"; font-weight: 400;
+    src: local("OpenDyslexic"), local("OpenDyslexic Regular"),
+         url("fonts/OpenDyslexic-Regular.woff") format("woff"), url("fonts/OpenDyslexic-Regular.otf") format("opentype"); }
+  @font-face { font-family: "OpenDyslexic"; font-weight: 700;
+    src: local("OpenDyslexic Bold"),
+         url("fonts/OpenDyslexic-Bold.woff") format("woff"), url("fonts/OpenDyslexic-Bold.otf") format("opentype"); }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--font); display: flex; flex-direction: column; }
+
+  header {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px;
+    padding: calc(10px + env(safe-area-inset-top, 0px)) 14px 10px;
+    background: var(--bar); color: var(--bar-text); border-bottom: 4px solid var(--ochre);
+  }
+  .logo { width: 44px; height: 30px; flex: none; }
+  h1 { font: 700 21px Georgia, "Times New Roman", serif; margin: 0; letter-spacing: .2px; }
+  .sp { flex: 1; }
+  #status { display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: rgba(255,255,255,.14); border: 1.5px solid rgba(255,255,255,.5); }
+  #dot { width: 11px; height: 11px; border-radius: 50%; background: #c9d8b8; }
+  #status.live { background: #1F8F4A; border-color: #1F8F4A; } #status.live #dot { background: #fff; }
+  #status.paused { background: #D9A441; border-color: #D9A441; color: #2E2A22; } #status.paused #dot { background: #2E2A22; border-radius: 2px; }
+  #status.ended { background: #6B6354; border-color: #6B6354; } #status.ended #dot { background: #fff; border-radius: 2px; }
+  #status.wait #dot { background: #D9A441; }
+  .sr { position: absolute; left: -9999px; }
+  #lang { font: inherit; font-size: 15px; color: #fff; background: rgba(255,255,255,.14); border: 1.5px solid rgba(255,255,255,.6); border-radius: 8px; padding: 6px 8px; }
+  #lang option { color: #000; }
+
+  .wrap { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr; }
+  .stage { display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; padding: 16px; min-height: 0; overflow: hidden; }
+  #slidebox { flex: none; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+  #slidebox[hidden] { display: none; }
+  #caps { flex: 1; min-height: 0; display: flex; flex-direction: column-reverse; justify-content: flex-end; /* newest on top, older ones below */ gap: 16px; overflow: hidden; }
+  #slide { flex: 1; min-height: 0; width: 100%; object-fit: contain; background: #fff; border: 1px solid var(--line); border-radius: 6px; }
+  #slidecap { font-size: 14px; color: var(--muted); }
+  .mark { font-size: 13px; font-weight: 700; color: var(--accent); padding: 10px 0 2px; border-top: 2px solid var(--ochre); }
+  #empty { text-align: center; color: var(--muted); font-size: 20px; margin: auto; }
+
+  .line { border-left: 6px solid var(--c); padding-left: 14px; }
+  .who { font-size: calc(var(--size) * .5); font-weight: 700; color: var(--c); }
+  .old { color: var(--text); }   /* full text color; only the opacity below dims it */
+  .old .t { font-size: calc(var(--size) * .7); line-height: 1.4; }   /* all previous sentences: same size */
+  #prev1 { opacity: .75; }                                           /* second most recent */
+  #prev2, #prev3, #prev4, #prev5, #prev6 { opacity: .5; }            /* everything older */
+  :root[data-contrast="high"] #prev1, :root[data-contrast="high"] #prev2, :root[data-contrast="high"] #prev3, :root[data-contrast="high"] #prev4, :root[data-contrast="high"] #prev5, :root[data-contrast="high"] #prev6 { opacity: 1; }
+  /* No slides: captions get the whole screen, so they run larger with more history */
+  body.no-slides #cur .t { font-size: calc(var(--size) * 1.2); }
+  body.no-slides .old .t { font-size: calc(var(--size) * .85); }
+  #cur { border-left-width: 9px; }
+  #cur .t { font-size: var(--size); line-height: 1.4; letter-spacing: var(--ls, 0); }
+  @keyframes rise { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: none; } }
+  .orig { font-size: calc(var(--size) * .58); color: var(--muted); margin-top: 8px; }
+  .note { font-size: 14px; color: var(--muted); font-style: italic; }
+
+  /* Right-hand panel (bottom sheet on phones) that holds the transcript and the quiz, each toggled by its own button */
+  #side { display: none; flex-direction: column; justify-content: flex-end; min-height: 0; background: var(--panel); border-left: 1px solid var(--line); }
+  body.side-open #side { display: flex; }
+  #tr { display: none; flex-direction: column; flex: 1; min-height: 0; }
+  body.tr-open #tr { display: flex; }                /* transcript and quiz share one panel: only one is ever open */
+  #quiz { display: none; flex: 1; min-height: 0; overflow-y: auto; }
+  body.quiz-open #quiz { display: block; }
+  #quiz button.primary { background: var(--moss); color: #fff; border-color: var(--moss); }
+  .phead { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--line); }
+  .phead h2 { margin: 0; padding: 12px 14px; font-size: 16px; }
+  #side .x { flex: none; width: 44px; height: 44px; min-height: 0; margin-right: 8px; padding: 0; text-align: center; font: inherit; font-size: 18px; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 8px; cursor: pointer; }
+  #side .x:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+  .qpad { padding: 14px; }
+  #list { flex: 1; overflow-y: auto; padding: 8px 14px 16px; }
+  .row { display: flex; gap: 10px; padding: 9px 0; border-bottom: 1px dashed var(--line); font-size: 17px; line-height: 1.4; }
+  .row.partial { opacity: .65; }
+  .ts { color: var(--muted); font-size: 13px; padding-top: 3px; min-width: 38px; }
+  .rw { color: var(--c); }
+  @media (max-width: 819px) {
+    #side { position: fixed; left: 0; right: 0; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); border-top: 3px solid var(--moss); box-shadow: 0 -6px 18px rgba(0,0,0,.18); }
+    #tr { flex: none; height: 50vh; } #quiz, #sp { flex: none; max-height: 52vh; }
+  }
+  @media (min-width: 820px) { body.side-open .wrap { grid-template-columns: 1fr 360px; } }
+
+  footer { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--line); background: var(--panel); }
+  footer button { font: inherit; font-size: 15px; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 10px; padding: 8px 12px; min-height: 44px; }
+  footer button[aria-pressed="true"] { border-color: var(--accent); font-weight: 700; }
+  button:focus-visible, select:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+
+  .chip { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.14); color: #fff; border: 1.5px solid rgba(255,255,255,.6); border-radius: 999px; padding: 2px 12px 2px 6px; font: inherit; font-size: 15px; }
+  .chiplabel { max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .chiplabel::after { content: " ·"; }
+  #qtypes { margin-bottom: 10px; }
+  #quiz .opt[aria-pressed="true"] { background: var(--moss); color: #fff; border-color: var(--moss); font-weight: 700; }
+  #sumlist { list-style: none; padding: 0; margin: 8px 0; } #sumlist li { display: flex; justify-content: space-between; gap: 16px; padding: 7px 0; border-bottom: 1px dashed var(--line); }
+  .chip svg { width: 42px; height: 36px; display: block; }
+  button.primary { background: var(--moss); color: #fff; border-color: var(--moss); }
+  #slidecap { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  #slidecap button { font: inherit; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 8px; padding: 2px 12px; min-height: 32px; }
+  dialog { border: 2px solid var(--moss); border-radius: 14px; background: var(--panel); color: var(--text); width: min(560px, 92vw); padding: 18px; font-family: inherit; }
+  dialog::backdrop { background: rgba(30,26,18,.55); }
+  dialog h3, #quiz h3 { margin: 0 0 8px; font-size: 20px; }
+  dialog button, #quiz button { font: inherit; font-size: 17px; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 10px; padding: 10px 14px; min-height: 46px; text-align: left; }
+  dialog button:focus-visible, dialog textarea:focus-visible, #quiz button:focus-visible, #quiz textarea:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
+  blockquote { margin: 8px 0 14px; padding-left: 12px; border-left: 5px solid var(--ochre); font-size: 19px; line-height: 1.4; }
+  .opts { display: flex; flex-direction: column; gap: 8px; }
+  dialog button.right, #quiz button.right { border-color: #3F7A2E; background: rgba(63,122,46,.2); }
+  dialog button.wrong, #quiz button.wrong { border-color: #A8482C; background: rgba(168,72,44,.15); }
+  dialog textarea, #quiz textarea { width: 100%; font: inherit; font-size: 17px; padding: 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); margin-bottom: 10px; }
+  #qfb { margin: 12px 0 0; font-weight: 700; min-height: 1.4em; }
+  .gnote { color: var(--muted); font-size: 14px; margin: 10px 0 0; } .gcenter { text-align: center; margin: 8px 0; font-weight: 700; }
+  .qrow { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
+  #gplant svg { width: 240px; height: 204px; display: block; margin: 0 auto; }
+  #gbarwrap { height: 14px; border-radius: 7px; background: var(--line); overflow: hidden; } #gbar { height: 100%; background: var(--moss); }
+
+    #qremi { width: 110px; height: 94px; margin: 0 auto 6px; }
+  #qremi .head { transform-box: fill-box; transform-origin: 50% 100%; }
+  #qremi.hop .head { animation: hop .7s ease-out; } #qremi.wob .head { animation: wob .7s ease-in-out; }
+  @keyframes hop { 0%, 100% { transform: translateY(0); } 30% { transform: translateY(-14px); } 60% { transform: translateY(0); } 80% { transform: translateY(-6px); } }
+  @keyframes wob { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-5deg); } 75% { transform: rotate(5deg); } }
+  .chip.pulse { animation: pulse .5s ease-out; } @keyframes pulse { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  #toast { position: fixed; left: 50%; top: calc(70px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 20; background: var(--moss); color: #fff; border: 2px solid var(--ochre); border-radius: 999px; padding: 10px 18px; font-weight: 700; max-width: 90vw; text-align: center; }
+  dialog { max-height: 90vh; overflow-y: auto; }
+  .bh { margin: 14px 0 0; }
+  #gbadges { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #gbadges li { border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 14px; color: var(--muted); }
+  #gbadges li.on { border-color: var(--moss); background: rgba(63,90,46,.14); color: var(--text); }
+  #gbadges b { display: block; font-size: 15px; }
+
+  .gl { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  #gname { width: 100%; font: inherit; font-size: 17px; padding: 9px 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); }
+  .crow { margin-top: 12px; } .copts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+  .opt { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px; font-size: 15px; }
+  .opt i { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line); display: inline-block; }
+  .opt[aria-pressed="true"] { border-color: var(--moss); background: rgba(63,90,46,.16); font-weight: 700; }
+  .opt:disabled { opacity: .5; }
+  #sizeval { min-width: 56px; text-align: center; font-weight: 700; }
+
+  #sp { display: none; flex: 1; min-height: 0; flex-direction: column; overflow-y: auto; }
+  body.slides-open #sp { display: flex; }
+  .pill { font-size: 13px; font-weight: 700; background: var(--line); color: var(--text); border-radius: 999px; padding: 3px 10px; margin-left: auto; margin-right: 8px; white-space: nowrap; }
+  .pill.on { background: var(--moss); color: #fff; }
+  #drop { border: 2px dashed var(--line); border-radius: 12px; padding: 14px; text-align: center; } #drop p { margin: 0 0 10px; }
+  #drop.over { border-color: var(--moss); background: rgba(63,90,46,.12); }
+  #splist { list-style: none; padding: 0; margin: 10px 0; display: grid; gap: 6px; }
+  #sp button { font: inherit; font-size: 16px; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 10px; padding: 8px 12px; min-height: 44px; cursor: pointer; }
+  #sp button.primary { background: var(--moss); color: #fff; border-color: var(--moss); }
+  #sp li button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; }
+  #sp li button img { width: 64px; height: 36px; object-fit: cover; border: 1px solid var(--line); border-radius: 4px; flex: none; }
+  #sp li button[aria-current="true"], #sp button[aria-pressed="true"]:not(.primary) { border-color: var(--moss); background: rgba(63,90,46,.16); font-weight: 700; }
+  button:disabled { opacity: .45; cursor: default; }
+
+  /* Loading screen */
+  #loader { position: fixed; inset: 0; z-index: 10; background: var(--moss); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; transition: opacity .35s; }
+  #loader.gone { opacity: 0; pointer-events: none; }
+  /* Remi peeking out of the ground, facing the viewer (drawn in the script, see PEEK) */
+  .peekslot { margin: 0 auto; width: 240px; height: 204px; }
+  .peekslot svg, .peekslot img { width: 100%; height: 100%; display: block; object-fit: contain; }
+  #empty .peekslot { width: 150px; height: 128px; margin-bottom: 12px; }
+  #loader .peekslot .head { animation: rise 2.6s ease-in-out infinite; }   /* only the loading screen moves */
+  @keyframes rise { 0%, 100% { transform: translateY(62px); } 40%, 60% { transform: translateY(0); } }
+  #loader h2 { margin: 0; font: 700 40px Georgia, "Times New Roman", serif; }
+  #loader p { margin: 0; font-size: 18px; color: #e5ecd9; }
+  @keyframes bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
+  @media (prefers-reduced-motion: reduce) { .peekslot .head, #qremi .head, #qremi.hop .head, #qremi.wob .head, .chip.pulse, #cur.enter { animation: none; } #loader { transition: none; } }
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mole" viewBox="0 0 134 90">
+    <path d="M14 60Q2 56 4 44" fill="none" stroke="#D49A8A" stroke-width="5" stroke-linecap="round"/>
+    <ellipse cx="60" cy="58" rx="44" ry="26" fill="#EBB9A4"/>
+    <path d="M40 44q6 6 0 14M58 40q6 7 0 15M76 44q6 6 0 14" fill="none" stroke="#D49A8A" stroke-width="2" stroke-linecap="round"/>
+    <ellipse cx="38" cy="82" rx="10" ry="5" fill="#D49A8A"/><ellipse cx="78" cy="82" rx="10" ry="5" fill="#D49A8A"/>
+    <ellipse cx="96" cy="50" rx="23" ry="20" fill="#F0C5B2"/>
+    <path d="M79 43Q81 30 94 30" fill="none" stroke="#D9A441" stroke-width="3.5" stroke-linecap="round"/>
+    <circle cx="78" cy="48" r="5" fill="#D9A441" stroke="#3F5A2E" stroke-width="1.5"/>
+    <ellipse cx="116" cy="47" rx="5" ry="4" fill="#D98F85"/>
+    <rect x="108" y="54" width="8" height="12" rx="2.5" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/>
+    <rect x="116" y="54" width="8" height="12" rx="2.5" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/>
+    <path d="M98 42q5-4 10 0" fill="none" stroke="#4A2230" stroke-width="2.4" stroke-linecap="round"/>
+    <path d="M88 26q12-12 26-2M92 15q18-14 38 0" fill="none" stroke="#D9A441" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<div id="loader" role="status">
+  <div class="peekslot"></div>
+  <h2>LevelUp Live</h2>
+  <p>Remi is finding your lecture…</p>
+</div>
+
+<header>
+  <svg class="logo" aria-hidden="true"><use href="#mole"/></svg>
+  <h1>LevelUp Live</h1>
+  <div class="sp"></div>
+  <div id="status"><span id="dot"></span><span id="stext">Connecting…</span></div>
+  <button id="xpchip" class="chip" aria-label="Open My Mole Rat"><span id="minimole"></span><span class="chiplabel" id="chipname">Moley</span><b id="xpn">0 XP</b></button>
+  <select id="lang" aria-label="Caption language"></select>
+  <button id="settingsbtn" class="chip" aria-label="Settings">Settings</button>
+</header>
+<span id="announce" class="sr" role="status"></span>
+
+<div class="wrap">
+  <section class="stage" id="stage">
+    <figure id="slidebox" hidden><img id="slide" alt="Current lecture slide"><figcaption id="slidecap"><button id="sprev" aria-label="Previous slide">◀</button><span id="slabel"></span><button id="snext" aria-label="Next slide">▶</button></figcaption></figure>
+    <div id="caps">
+    <div id="empty"><div class="peekslot"></div>Remi is waiting for the professor to start…</div>
+    <div class="line old" id="prev6" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev5" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev4" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev3" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev2" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line old" id="prev1" hidden><div class="who"></div><div class="t"></div></div>
+    <div class="line" id="cur" hidden>
+      <div class="who" id="cwho"></div><div class="t" id="cmain"></div>
+      <div class="orig" id="corig" hidden></div><div class="note" id="cnote" hidden></div>
+    </div>
+    </div>
+  </section>
+  <aside id="side">
+    <section id="tr">
+      <div class="phead"><h2>Transcript</h2><button class="x" id="trclose" aria-label="Close transcript">✕</button></div>
+      <div id="list"></div>
+    </section>
+    <section id="quiz" aria-label="Quiz">
+      <div class="phead"><h2>Quiz</h2><button class="x" id="qx" aria-label="Close quiz">✕</button></div>
+      <div class="qpad">
+        <p class="gnote" style="margin:0 0 6px">Pick the kinds of questions you want. Turn on as many as you like.</p>
+        <div id="qtypes" class="copts" role="group" aria-label="Question types"></div>
+        <div id="qremi" class="peekslot" aria-hidden="true"></div>
+        <div id="qbody"></div><p id="qfb" role="status"></p>
+        <p class="gnote">Questions come from the last 30 seconds of captions, and only when you ask. Tapped by accident? Just close it.</p>
+        <div class="qrow"><button id="qclose">Close</button><button id="qnext" class="primary" hidden>Another question</button></div>
+      </div>
+    </section>
+    <section id="sp" aria-label="My slides">
+      <div class="phead"><h2>My slides</h2><span id="spcount" class="pill">No slides yet</span><button class="x" id="spx" aria-label="Close slides panel">✕</button></div>
+      <div class="qpad">
+        <div id="drop"><p><b>Drop slide images here</b><br>PNG or JPG, in the order you want them. Slides stay on this device.</p><button id="choose" class="primary">Choose files</button></div>
+        <ul id="splist"></ul>
+        <div class="copts"><button id="showslide" aria-pressed="true" hidden>Show above captions</button><button id="clearslides" hidden>Remove all</button></div>
+      </div>
+    </section>
+  </aside>
+</div>
+
+<footer>
+  <button id="startbtn" class="primary">Start</button>
+  <button id="pausebtn" disabled>Pause</button>
+  <button id="endbtn" disabled>End</button>
+  <button id="quizbtn" class="primary">Quiz me</button>
+  <button id="slidesbtn" aria-pressed="false">My slides</button>
+  <button id="trbtn" aria-pressed="false">Transcript</button>
+  <button id="demo" aria-pressed="false">Demo</button>
+</footer>
+
+<div id="toast" role="status" hidden></div>
+<dialog id="summary">
+  <h3>Lecture finished</h3><ul id="sumlist"></ul>
+  <div class="qrow"><button id="dl">Download transcript</button><button id="sumclose" class="primary">Done</button></div>
+</dialog>
+<dialog id="settings">
+  <h3>Settings</h3>
+  <p class="gnote" style="margin:0 0 6px">How LevelUp Live looks and reads. These don't change the lecture or your game.</p>
+  <div class="crow"><b>Text size</b><div class="copts"><button id="smaller" aria-label="Smaller text">A−</button><span id="sizeval"></span><button id="bigger" aria-label="Larger text">A+</button></div></div>
+  <div class="crow"><b>Font</b><div class="copts"><button id="fontbtn">Font</button></div></div>
+  <div class="crow"><b>Display</b><div class="copts"><button id="contrast" aria-pressed="false">High contrast</button><button id="theme" aria-pressed="false">Dark mode</button></div></div>
+  <p class="gnote">Your progress and mole rat are saved on this device only. No account needed.</p>
+  <div class="qrow"><button id="sclose" class="primary">Done</button></div>
+</dialog>
+<dialog id="garden">
+  <h3>My Mole Rat</h3><div id="gplant"></div>
+  <label class="gl" for="gname">Name your mole rat</label><input type="text" id="gname" maxlength="16" autocomplete="off">
+  <p id="glevel" class="gcenter"></p><div id="gbarwrap"><div id="gbar"></div></div><p id="gtext" class="gcenter"></p><p id="gnext" class="gcenter"></p>
+  <h3 class="bh">Customize</h3><div id="gcust"></div>
+  <h3 class="bh">Badges</h3><ul id="gbadges"></ul>
+  <p class="gnote">Your mole rat gets rounder as you level up. Everything is saved on this device only. No account needed.</p>
+  <div class="qrow"><button id="gclose">Close</button></div>
+</dialog>
+
+<script>
+const params = new URLSearchParams(location.search);
+const SESSION = params.get("s") || "lecture-1";
+const root = document.documentElement, $ = id => document.getElementById(id);
+const store = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
+                set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
+
+/* ===== Loading screen: at least 1 s, gives up after 6 s ===== */
+const loaderStart = Date.now();
+function hideLoader() { setTimeout(() => $("loader").classList.add("gone"), Math.max(0, 1000 - (Date.now() - loaderStart))); }
+setTimeout(hideLoader, 6000);
+
+/* ===== Language (defaults to the phone's language) ===== */
+const LANGS = { en: "English", es: "Español", zh: "中文", hi: "हिन्दी", ar: "العربية", vi: "Tiếng Việt", ko: "한국어" };
+let lang = store.get("hmo-lang") || (navigator.language || "en").slice(0, 2).toLowerCase();
+if (!LANGS[lang]) lang = "en";
+$("lang").innerHTML = Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
+$("lang").value = lang;
+$("lang").onchange = e => { lang = e.target.value; store.set("hmo-lang", lang); redrawAll(); if (lang !== "en") award("poly"); };
+
+/* ===== Captions: previous sentence, current sentence, transcript ===== */
+const segs = new Map(), rows = new Map(), spk = new Map();
+let curId = null, hist = [], listStick = true;
+let hasSlide = false, slidesOn = store.get("hmo-slides") !== "0";
+const list = $("list");
+const col = n => { if (!spk.has(n)) spk.set(n, spk.size % 6); return `var(--sp${spk.get(n)})`; };
+const fmt = s => { s = Math.max(0, Math.floor(s || 0)); return Math.floor(s / 60) + ":" + String(s % 60).padStart(2, "0"); };
+
+function pick(m) {                       // translated text if we have it, else English
+  const t = m.translations && m.translations[lang];
+  if (lang !== "en" && t) return { main: t, orig: m.text, note: "" };
+  return { main: m.text, orig: "", note: lang !== "en" && m.is_final ? "Showing English: translation not available" : "" };
+}
+
+function fillStage() {
+  const c = segs.get(curId);
+  document.body.classList.toggle("no-slides", $("slidebox").hidden);
+  const maxPrev = $("slidebox").hidden ? 6 : 3;          // no slides: show more history
+  [6, 5, 4, 3, 2, 1].forEach(k => {
+    const p = k <= maxPrev ? segs.get(hist[hist.length - k]) : null, el = $("prev" + k);
+    el.hidden = !p; if (!p) return;
+    el.style.setProperty("--c", col(p.speaker));
+    el.querySelector(".who").textContent = p.speaker;
+    el.querySelector(".t").textContent = pick(p).main;
+  });
+  $("cur").hidden = !c;
+  if (c) {
+    const t = pick(c);
+    $("cur").style.setProperty("--c", col(c.speaker)); $("cwho").textContent = c.speaker;
+    $("cmain").textContent = t.main;
+    $("corig").textContent = t.orig; $("corig").hidden = !t.orig;
+    $("cnote").textContent = t.note; $("cnote").hidden = !t.note;
+    $("cur").classList.toggle("partial", c.is_final === false);
+  }
+  fitStage();
+}
+
+/* Slide is as big as the screen allows (16:9, at most 55% of the height). It depends only on the
+   screen, never on caption length, so it stays still. The captions get everything left over. */
+function showSlides() {          // slide shows only if the professor has slides AND the student wants them
+  $("slidebox").hidden = !(hasSlide && slidesOn);
+  $("showslide").setAttribute("aria-pressed", hasSlide && slidesOn);
+  sizeSlide(); fillStage();
+}
+function sizeSlide() {
+  if ($("slidebox").hidden) return;
+  const st = $("stage");
+  const img = Math.min(st.clientHeight * 0.55, (st.clientWidth - 32) * 9 / 16);
+  $("slidebox").style.height = Math.round(img + 40) + "px";
+}
+
+/* Show as many previous sentences as fit (up to three with a slide, six without) so nothing is cut off mid-line */
+function fitStage() {
+  const caps = $("caps");
+  const tooTall = () => {
+    const v = [...caps.children].filter(e => !e.hidden);
+    return v.reduce((a, e) => a + e.offsetHeight, 0) + 16 * Math.max(0, v.length - 1) > caps.clientHeight;
+  };
+  for (const id of ["prev6", "prev5", "prev4", "prev3", "prev2", "prev1"]) if (!$(id).hidden && tooTall()) $(id).hidden = true;
+}
+
+function fillRow(m) {
+  let r = rows.get(m.segment_id);
+  if (!r) {
+    r = document.createElement("div"); r.className = "row";
+    r.innerHTML = '<span class="ts"></span><div><b class="rw"></b> <span class="rt"></span></div>';
+    list.appendChild(r); rows.set(m.segment_id, r);
+  }
+  r.style.setProperty("--c", col(m.speaker));
+  r.querySelector(".ts").textContent = fmt(m.start);
+  r.querySelector(".rw").textContent = m.speaker;
+  r.querySelector(".rt").textContent = pick(m).main;
+  r.classList.toggle("partial", m.is_final === false);
+}
+
+function onCaption(m) {
+  const e = $("empty"); if (e) e.remove();
+  segs.set(m.segment_id, m); fillRow(m);
+  if (m.is_final !== false) finals.set(m.segment_id, { t: (finals.get(m.segment_id) || {}).t || lnow(), m });
+  if (m.segment_id !== curId && (curId === null || m.segment_id > curId)) {
+    if (curId !== null) hist.push(curId);          // old sentence moves down
+    curId = m.segment_id;
+    const c = $("cur"); c.classList.remove("enter"); void c.offsetWidth; c.classList.add("enter");
+  }
+  fillStage();
+  if (listStick) list.scrollTop = list.scrollHeight;
+}
+
+function redrawAll() {
+  $("stage").dir = $("tr").dir = $("quiz").dir = lang === "ar" ? "rtl" : "ltr";
+  segs.forEach(fillRow); fillStage();
+}
+list.onscroll = () => { listStick = list.scrollHeight - list.scrollTop - list.clientHeight < 60; };
+
+function setStatus(kind, text) { $("status").className = kind; $("stext").textContent = text; }
+
+function onMsg(m) {
+  if (m.type === "caption") onCaption(m);
+  else if (m.type === "session_end") setStatus("wait", "Lecture ended");
+}
+
+/* ===== Live connection ===== */
+let ws, retry = 0, demoOn = false, reconnectTimer;
+function connect() {
+  if (demoOn) return;
+  ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/captions/${SESSION}`);
+  ws.onopen = () => { retry = 0; setStatus("live", "Live"); hideLoader(); backfill(); };
+  ws.onmessage = e => { try { onMsg(JSON.parse(e.data)); } catch (_) {} };
+  ws.onclose = () => { if (demoOn) return; setStatus("wait", "Reconnecting…"); reconnectTimer = setTimeout(connect, Math.min(1000 * 2 ** retry++, 8000)); };
+  ws.onerror = () => ws.close();
+}
+async function backfill() {   // fill the transcript with anything missed
+  try {
+    const d = await (await fetch(`/sessions/${SESSION}/transcript`)).json();
+    (Array.isArray(d) ? d : d.segments || []).forEach(s => { if (!segs.has(s.segment_id)) { segs.set(s.segment_id, { is_final: true, ...s }); fillRow(segs.get(s.segment_id)); } });
+  } catch (_) {}
+}
+
+/* ===== Demo mode (no server needed). Spanish shown as the translation example ===== */
+const script = [
+  ["Speaker 1", "Welcome back, everyone. Today we're studying the naked mole-rat, one of biology's strangest mammals.", "Bienvenidos de nuevo a todos. Hoy estudiamos la rata topo desnuda, uno de los mamíferos más extraños de la biología."],
+  ["Speaker 2", "Professor Okonkwo, are the slides posted?", "Profesor Okonkwo, ¿ya están publicadas las diapositivas?"],
+  ["Speaker 1", "Yes, the BIO 340 slides went up last night.", "Sí, las diapositivas de BIO 340 se publicaron anoche."],
+  ["Speaker 2", "Sorry, what does eusocial mean?", "Perdón, ¿qué significa eusocial?"],
+  ["Speaker 1", "Good question. Like bees, they live in colonies with one queen who has nearly all the babies.", "Buena pregunta. Como las abejas, viven en colonias con una sola reina que tiene casi todas las crías."],
+  ["Speaker 1", "A typical colony has about seventy-five animals, and some have several hundred.", "Una colonia típica tiene unos setenta y cinco animales, y algunas tienen varios cientos."],
+  ["Speaker 1", "Workers dig tunnels and gather food, while soldiers defend the colony.", "Las obreras excavan túneles y reúnen comida, mientras los soldados defienden la colonia."],
+  ["Speaker 3", "Where do they live?", "¿Dónde viven?"],
+  ["Speaker 1", "Underground in East Africa, in countries like Kenya, Ethiopia, and Somalia.", "Bajo tierra en África Oriental, en países como Kenia, Etiopía y Somalia."],
+  ["Speaker 1", "They eat large underground tubers, which are roots full of starch and water.", "Comen grandes tubérculos subterráneos, que son raíces llenas de almidón y agua."],
+  ["Speaker 1", "Their lips close behind their front teeth, so they can dig without swallowing dirt.", "Sus labios se cierran detrás de los dientes delanteros, así que pueden excavar sin tragar tierra."],
+  ["Speaker 2", "Is it true they don't feel pain?", "¿Es cierto que no sienten dolor?"],
+  ["Speaker 1", "Not quite. They ignore acid and capsaicin, the chemical that makes chili peppers hot.", "No exactamente. Ignoran el ácido y la capsaicina, la sustancia que hace picantes los chiles."],
+  ["Speaker 1", "They can also survive many minutes with no oxygen at all.", "También pueden sobrevivir muchos minutos sin nada de oxígeno."],
+  ["Speaker 3", "Is it true they almost never get cancer?", "¿Es cierto que casi nunca tienen cáncer?"],
+  ["Speaker 1", "Yes. Cancer is extremely rare, and researchers study a sugar called hyaluronan that may protect them.", "Sí. El cáncer es extremadamente raro, y los investigadores estudian un azúcar llamado hialuronano que podría protegerlos."],
+  ["Speaker 1", "They can live more than thirty years, which is very long for a rodent.", "Pueden vivir más de treinta años, algo muy largo para un roedor."],
+  ["Speaker 1", "They also have poor hearing and eyesight, so they sense the world through touch and vibrations.", "También tienen mala audición y mala vista, así que perciben el mundo mediante el tacto y las vibraciones."],
+  ["Speaker 2", "How does the queen stay in charge?", "¿Cómo mantiene el control la reina?"],
+  ["Speaker 1", "She keeps other females from breeding, and her litters can reach a dozen pups or more.", "Impide que otras hembras se reproduzcan, y sus camadas pueden llegar a una docena de crías o más."],
+  ["Speaker 1", "Only two mammals are known to be eusocial: the naked mole-rat and the Damaraland mole-rat.", "Solo se conocen dos mamíferos eusociales: la rata topo desnuda y la rata topo de Damaraland."],
+  ["Speaker 1", "For Friday, read chapter six and write one paragraph on why eusociality is so rare.", "Para el viernes, lean el capítulo seis y escriban un párrafo sobre por qué la eusocialidad es tan rara."],
+];
+let demoTimer, demoId = 1000, t0 = Date.now();
+function runDemo() {
+  const [speaker, text, es] = script[(demoId - 1000) % script.length], id = demoId++, words = text.split(" ");
+  let i = 0;
+  const tick = () => {
+    if (!demoOn) return;
+    i += 2; const done = i >= words.length;
+    onCaption({ type: "caption", segment_id: id, speaker, is_final: done, start: (Date.now() - t0) / 1000,
+                text: words.slice(0, done ? words.length : i).join(" "), translations: done ? { es } : undefined });
+    demoTimer = setTimeout(done ? runDemo : tick, done ? 2000 : 450);
+  };
+  tick();
+}
+function setDemo(on) {
+  if (on && (lecture.state === "live" || lecture.state === "paused")) endLecture(true);
+  demoOn = on; $("demo").setAttribute("aria-pressed", on);
+  if (on && store.get("hmo-slides") === null) slidesOn = false;   // demo starts without slides; tap Slides to add them
+  clearTimeout(demoTimer); clearTimeout(reconnectTimer);
+  if (on) { if (ws) ws.close(); setStatus("wait", "Demo mode"); hideLoader(); runDemo(); }
+  else { setStatus("wait", "Connecting…"); connect(); }
+}
+$("demo").onclick = () => setDemo(!demoOn);
+$("settingsbtn").onclick = () => $("settings").showModal();
+$("sclose").onclick = () => $("settings").close();
+
+/* ===== Lecture: start, pause, resume, end. Uses this device's microphone with the browser's speech recognition.
+   Works in Chrome, Edge and Safari, on https or localhost. Chrome sends the audio to Google to do this. ===== */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const lecture = { state: "idle", xp0: 0, answered: 0 };
+let rec = null, micBase = 100000, pausedTotal = 0, pausedAt = 0, armTimer;
+const lnow = () => (pausedAt || Date.now()) - pausedTotal;   // lecture time: stands still while paused or ended
+function stopSources() { demoOn = false; $("demo").setAttribute("aria-pressed", false); clearTimeout(demoTimer); clearTimeout(reconnectTimer); if (ws) { ws.onclose = null; ws.close(); } }
+function startRec() {
+  rec = new SR(); rec.continuous = true; rec.interimResults = true; rec.lang = "en-US";
+  rec.onresult = e => {
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      onCaption({ type: "caption", segment_id: micBase + i, speaker: "Speaker 1", text: r[0].transcript.trim(), is_final: r.isFinal, start: lnow() / 1000 });
+    }
+  };
+  rec.onend = () => { if (lecture.state === "live") { micBase += 1000; try { rec.start(); } catch (_) {} } };   // browsers stop after a pause in speech; keep going
+  rec.onerror = e => { if (/not-allowed|service-not-allowed/.test(e.error)) { toast("The microphone is blocked. Allow it from the address bar and try again."); endLecture(true); } };
+  rec.start();
+}
+function stopRec() { if (rec) { rec.onend = null; rec.onresult = null; try { rec.stop(); } catch (_) {} } }
+function resetLecture() {
+  segs.clear(); rows.clear(); list.textContent = ""; finals.clear(); hist = []; curId = null; lastQ = null; used.clear(); lastKind = null;
+  const e = $("empty"); if (e) e.remove(); fillStage();
+}
+function startLecture() {
+  if (!SR) { toast("This browser can't turn speech into text. Try Chrome, Edge, or Safari."); return; }
+  stopSources(); hideLoader(); resetLecture();
+  Object.assign(lecture, { state: "live", xp0: xp, answered: 0 }); pausedTotal = 0; pausedAt = 0;
+  startRec(); renderLecture();
+}
+function pauseLecture() { lecture.state = "paused"; pausedAt = Date.now(); stopRec(); renderLecture(); toast("Paused for the break. Press Resume to continue. Quiz me still works."); }
+function resumeLecture() { pausedTotal += Date.now() - pausedAt; pausedAt = 0; lecture.state = "live"; micBase += 1000; startRec(); renderLecture(); }
+function endLecture(silent) {
+  if (lecture.state !== "live" && lecture.state !== "paused") return;
+  stopRec(); if (!pausedAt) pausedAt = Date.now(); lecture.state = "ended"; renderLecture();
+  if (!silent) showSummary();
+}
+function showSummary() {
+  const ul = $("sumlist"); ul.textContent = "";
+  [["Lecture time", fmt(lnow() / 1000)], ["Sentences captured", finals.size], ["Questions answered", lecture.answered], ["XP earned", "+" + (xp - lecture.xp0)]].forEach(([k, v]) => {
+    const li = el("li"); li.append(el("span", k), el("b", String(v))); ul.append(li);
+  });
+  $("summary").showModal();
+}
+function renderLecture() {
+  const st = lecture.state, on = st === "live" || st === "paused";
+  $("startbtn").disabled = on; $("startbtn").textContent = st === "ended" ? "Start again" : "Start";
+  $("pausebtn").disabled = $("endbtn").disabled = !on; $("pausebtn").textContent = st === "paused" ? "Resume" : "Pause";
+  clearTimeout(armTimer); delete $("endbtn").dataset.arm; $("endbtn").textContent = "End";
+  $("announce").textContent = { idle: "", live: "Lecture started", paused: "Lecture paused", ended: "Live ended" }[st];
+  tickStatus();
+}
+function tickStatus() {   // header pill; the timer text is not announced every second, only changes of state are (see #announce)
+  const st = lecture.state, t = fmt(lnow() / 1000);
+  if (st === "live") setStatus("live", "Live · " + t); else if (st === "paused") setStatus("paused", "Paused · " + t); else if (st === "ended") setStatus("ended", "Live ended · " + t);
+}
+setInterval(tickStatus, 1000);
+$("startbtn").onclick = startLecture;
+$("pausebtn").onclick = () => (lecture.state === "paused" ? resumeLecture() : pauseLecture());
+$("endbtn").onclick = () => {   // two taps, so it can't be ended by accident
+  const b = $("endbtn");
+  if (b.dataset.arm) endLecture(false);
+  else { b.dataset.arm = 1; b.textContent = "Tap again to end"; armTimer = setTimeout(() => { delete b.dataset.arm; b.textContent = "End"; }, 4000); }
+};
+$("sumclose").onclick = () => $("summary").close();
+$("dl").onclick = () => {
+  const txt = [...finals.values()].sort((a, b) => a.m.segment_id - b.m.segment_id).map(f => `[${fmt(f.m.start)}] ${f.m.speaker}: ${f.m.text}`).join("\n");
+  const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([txt], { type: "text/plain" })); a.download = "lecture-transcript.txt"; a.click();
+};
+
+/* ===== Reading controls ===== */
+const MINSIZE = 20, MAXSIZE = 40;   // a fixed range, so bigger text never pushes the layout around
+let size = Math.min(MAXSIZE, Math.max(MINSIZE, +store.get("hmo-size") || 28));
+const applySize = () => {
+  const cap = Math.max(MINSIZE, Math.floor((($("stage").clientWidth || 360) - 32) / 9)), eff = Math.min(size, cap);   // small screens get a lower ceiling
+  root.style.setProperty("--size", eff + "px"); store.set("hmo-size", size);
+  $("sizeval").textContent = eff + " px" + (size >= MAXSIZE || eff < size ? " (max)" : "");
+  $("bigger").disabled = size >= MAXSIZE || eff < size; $("smaller").disabled = size <= MINSIZE;
+  fillStage();
+};
+$("bigger").onclick = () => { size = Math.min(size + 4, MAXSIZE); applySize(); };
+$("smaller").onclick = () => { size = Math.max(size - 4, MINSIZE); applySize(); };
+applySize();
+
+const FONTS = ["Atkinson Hyperlegible", "Lexend", "OpenDyslexic", "Inter"]; let fi = +store.get("hmo-font") || 0;
+function applyFont() { root.style.setProperty("--font", `"${FONTS[fi]}", system-ui, sans-serif`); $("fontbtn").textContent = "Font: " + FONTS[fi].split(" ")[0]; store.set("hmo-font", fi); fillStage(); }
+$("fontbtn").onclick = () => { fi = (fi + 1) % FONTS.length; applyFont(); };
+applyFont();
+
+$("contrast").onclick = e => { const on = root.dataset.contrast !== "high"; if (on) root.dataset.contrast = "high"; else delete root.dataset.contrast; e.target.setAttribute("aria-pressed", on); };
+$("theme").onclick = e => { const on = root.dataset.theme !== "dark"; if (on) root.dataset.theme = "dark"; else delete root.dataset.theme; e.target.setAttribute("aria-pressed", on); e.target.textContent = on ? "Light mode" : "Dark mode"; };
+function setTr(on) {
+  if (on) only("tr");
+  document.body.classList.toggle("tr-open", on); $("trbtn").setAttribute("aria-pressed", on); syncSide(); }
+function syncSide() {
+  document.body.classList.toggle("side-open", ["tr", "quiz", "slides"].some(n => document.body.classList.contains(n + "-open")));
+  sizeSlide(); applySize();
+}
+$("trbtn").onclick = () => { const on = !document.body.classList.contains("tr-open"); setTr(on); if (on) award("back"); };
+setTr(innerWidth >= 820);
+
+
+/* ===== Keep the screen awake (needs https or localhost) ===== */
+async function keepAwake() { try { if ("wakeLock" in navigator) await navigator.wakeLock.request("screen"); } catch (_) {} }
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") keepAwake(); });
+keepAwake();
+
+/* ===== Student's own slides (the professor does not upload any) ===== */
+const mySlides = []; let si = 0;
+const picker = Object.assign(document.createElement("input"), { type: "file", accept: "image/*", multiple: true });
+function addSlides(files) {
+  const all = [...files], imgs = all.filter(f => f.type.startsWith("image/"));
+  imgs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).forEach(f => mySlides.push({ url: URL.createObjectURL(f), name: f.name }));
+  if (imgs.length) { hasSlide = true; slidesOn = true; drawMySlide(); toast(`${imgs.length} slide${imgs.length > 1 ? "s" : ""} added`); }
+  if (all.length > imgs.length) toast("Only images work for now. Export your slides as PNG or JPG.");
+  drawSlidesPanel();
+}
+picker.onchange = () => { addSlides(picker.files); picker.value = ""; };
+function drawMySlide() { $("slide").src = mySlides[si].url; $("slabel").textContent = `Slide ${si + 1} of ${mySlides.length}`; showSlides(); drawSlidesPanel(); }
+function drawSlidesPanel() {
+  const n = mySlides.length, c = $("spcount");
+  c.textContent = n ? `${n} slide${n > 1 ? "s" : ""} added ✓` : "No slides yet"; c.classList.toggle("on", n > 0);
+  $("slidesbtn").textContent = n ? `My slides (${n})` : "My slides";
+  $("showslide").hidden = $("clearslides").hidden = !n; $("showslide").setAttribute("aria-pressed", slidesOn);
+  const ul = $("splist"); ul.textContent = "";
+  mySlides.forEach((sl, i) => {
+    const li = document.createElement("li"), b = document.createElement("button"), im = document.createElement("img");
+    im.src = sl.url; im.alt = ""; const t = document.createElement("span"); t.textContent = `${i + 1}. ${sl.name}${i === si ? " ✓" : ""}`; b.append(im, t);
+    if (i === si) b.setAttribute("aria-current", "true");
+    b.onclick = () => { si = i; slidesOn = true; drawMySlide(); };
+    li.append(b); ul.append(li);
+  });
+}
+function only(name) {   // the right-hand panel shows one thing at a time
+  ["tr", "quiz", "slides"].forEach(n => { if (n !== name) document.body.classList.remove(n + "-open"); });
+  $("trbtn").setAttribute("aria-pressed", name === "tr"); $("quizbtn").setAttribute("aria-pressed", name === "quiz"); $("slidesbtn").setAttribute("aria-pressed", name === "slides");
+}
+function setSlidesPanel(on) { if (on) only("slides"); document.body.classList.toggle("slides-open", on); $("slidesbtn").setAttribute("aria-pressed", on); syncSide(); }
+$("slidesbtn").onclick = () => setSlidesPanel(!document.body.classList.contains("slides-open"));
+$("spx").onclick = () => setSlidesPanel(false);
+$("choose").onclick = () => picker.click();
+$("showslide").onclick = () => { slidesOn = !slidesOn; showSlides(); drawSlidesPanel(); };
+$("clearslides").onclick = () => { mySlides.length = 0; hasSlide = false; si = 0; showSlides(); drawSlidesPanel(); toast("Slides removed"); };
+const dz = $("drop");
+["dragenter", "dragover"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.add("over"); }));
+["dragleave", "drop"].forEach(ev => dz.addEventListener(ev, e => { e.preventDefault(); dz.classList.remove("over"); }));
+dz.addEventListener("drop", e => addSlides(e.dataTransfer.files));
+$("sprev").onclick = () => { if (si > 0) { si--; drawMySlide(); } };
+$("snext").onclick = () => { if (si < mySlides.length - 1) { si++; drawMySlide(); } };
+drawSlidesPanel();
+
+/* ===== The mole-rat: one drawing function used for Remi (the mascot) and for each student's own mole-rat ===== */
+const SKINS = [
+  { id: "pink", m: "#EBB9A4", l: "#F0C5B2", d: "#D49A8A", lv: 1 }, { id: "tan", m: "#D9B38C", l: "#E6C7A5", d: "#B88F68", lv: 1 },
+  { id: "cocoa", m: "#B98A6B", l: "#CBA183", d: "#8F6448", lv: 1 }, { id: "grey", m: "#B9B2B0", l: "#CBC5C3", d: "#8E8785", lv: 3 },
+  { id: "rose", m: "#E7A3AC", l: "#F0B9C0", d: "#C47A86", lv: 5 }];
+const ACCENTS = [{ id: "moss", c: "#3F5A2E", lv: 1 }, { id: "ochre", c: "#D9A441", lv: 1 }, { id: "clay", c: "#A8482C", lv: 2 }, { id: "sky", c: "#2F5F7A", lv: 3 }, { id: "plum", c: "#6B3E62", lv: 4 }];
+const CHOICES = { glasses: [["none", "None", 1], ["round", "Round", 1], ["square", "Square", 2]], aid: [["none", "None", 1], ["gold", "Hearing aid", 1]],
+                  hat: [["none", "None", 1], ["beanie", "Beanie", 2], ["flower", "Flower", 4], ["grad", "Grad cap", 6], ["crown", "Crown", 8]],
+                  neck: [["none", "None", 1], ["bow", "Bow tie", 3], ["medal", "Medal", 5]] };   // all sit on the head or chest centre, so they fit at any size
+const REMI = { skin: "pink", glasses: "round", aid: "gold", hat: "none", neck: "none", accent: "moss", name: "Remi" };
+const cap = w => w[0].toUpperCase() + w.slice(1);
+const allUnlocks = () => [...SKINS.map(x => [x.lv, cap(x.id) + " skin"]), ...ACCENTS.map(x => [x.lv, cap(x.id) + " color"]), ...Object.values(CHOICES).flat().map(c => [c[2], c[1]])].filter(u => u[0] > 1);
+const unlocksAt = l => allUnlocks().filter(u => u[0] === l).map(u => u[1]);
+function nextUnlock() { const n = allUnlocks().filter(u => u[0] > lvl()).sort((a, b) => a[0] - b[0])[0]; return n ? `Next unlock: ${n[1]} at Level ${n[0]}` : "Everything is unlocked!"; }
+
+function moleSVG(o, g, ground) {   // g = how round (1 = slim, about 1.5 = roundest)
+  const k = SKINS.find(x => x.id === o.skin) || SKINS[0], ac = (ACCENTS.find(x => x.id === o.accent) || ACCENTS[0]).c;
+  const hs = 1 + (g - 1) * .25, by = 46 * (1 + (g - 1) * .5), L = 100 - 42 * g, R = 100 + 42 * g, ex = 100 - 56 * hs;
+  const ln = `fill="none" stroke="${k.d}" stroke-width="2" stroke-linecap="round"`, ink = `stroke="#2E2A22" stroke-width="3"`;
+  let s = `<svg viewBox="0 0 200 170" role="img" aria-label="${(o.name || "Mole-rat").replace(/[<>&"]/g, "")}"><g class="head">`;
+  s += `<ellipse cx="100" cy="112" rx="${54 * g}" ry="${by}" fill="${k.m}"/><ellipse cx="100" cy="124" rx="${34 * g}" ry="30" fill="${k.l}"/>`;
+  s += `<path d="M${100 - 36 * g} 104Q${100 - 26 * g} 112 ${100 - 34 * g} 122M${100 + 36 * g} 104Q${100 + 26 * g} 112 ${100 + 34 * g} 122M84 130Q100 136 116 130" ${ln}/>`;
+  s += `<path d="M${L} 98Q${L - 18} 118 ${L - 2} 136M${R} 98Q${R + 18} 118 ${R + 2} 136" fill="none" stroke="${k.m}" stroke-width="14" stroke-linecap="round"/>`;
+  s += `<g fill="${k.l}" stroke="${k.d}" stroke-width="1.5"><ellipse cx="${L - 1}" cy="138" rx="13" ry="8"/><ellipse cx="${R + 1}" cy="138" rx="13" ry="8"/></g>`;
+  s += `<path d="M${L - 9} 134v6M${L - 1} 132v8M${L + 7} 134v6M${R - 7} 134v6M${R + 1} 132v8M${R + 9} 134v6" ${ln}/>`;
+  s += `<g transform="translate(0 4)"><ellipse cx="100" cy="52" rx="${58 * hs}" ry="40" fill="${k.m}"/><ellipse cx="100" cy="64" rx="34" ry="24" fill="${k.l}"/>`;
+  s += `<path d="M78 24Q100 17 122 24M84 32Q100 27 116 32M62 38Q72 33 82 38M118 38Q128 33 138 38" ${ln}/>`;
+  s += `<circle cx="72" cy="44" r="3.8" fill="#3a1f26"/><circle cx="128" cy="44" r="3.8" fill="#3a1f26"/><circle cx="73.3" cy="42.7" r="1.2" fill="#fff"/><circle cx="129.3" cy="42.7" r="1.2" fill="#fff"/>`;
+  s += `<ellipse cx="100" cy="57" rx="8" ry="5.5" fill="#D98F85"/><rect x="92" y="70" width="8" height="17" rx="3" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/><rect x="100" y="70" width="8" height="17" rx="3" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/>`;
+  s += `<path d="M88 68Q100 74 112 68" fill="none" stroke="#7a3f45" stroke-width="2" stroke-linecap="round"/><path d="M72 62L50 58M72 67L48 69M128 62L150 58M128 67L152 69" stroke="#8a5a55" stroke-width="1.4" stroke-linecap="round"/>`;
+  if (o.glasses === "round") s += `<g fill="rgba(255,255,255,.35)" ${ink}><circle cx="72" cy="44" r="12"/><circle cx="128" cy="44" r="12"/></g><path d="M84 42Q100 36 116 42M60 42L46 38M140 42L154 38" fill="none" ${ink} stroke-linecap="round"/>`;
+  if (o.glasses === "square") s += `<g fill="rgba(255,255,255,.35)" ${ink}><rect x="59" y="33" width="26" height="22" rx="5"/><rect x="115" y="33" width="26" height="22" rx="5"/></g><path d="M85 40H115M59 40L46 38M141 40L154 38" fill="none" ${ink} stroke-linecap="round"/>`;
+  if (o.hat === "grad") s += `<path d="M56 16L100 2L144 16L100 30Z" fill="#2E2A22"/><path d="M78 24V34Q100 40 122 34V24" fill="#2E2A22"/><path d="M144 16V36" stroke="#D9A441" stroke-width="2"/><circle cx="144" cy="38" r="3" fill="#D9A441"/>`;
+  if (o.hat === "crown") s += `<path d="M64 24L70 4L84 18L100 2L116 18L130 4L136 24Z" fill="#D9A441" stroke="#8A6A00" stroke-width="2" stroke-linejoin="round"/>`;
+  if (o.hat === "beanie") s += `<path d="M50 30Q54 8 100 6Q146 8 150 30Q100 22 50 30Z" fill="${ac}"/><circle cx="100" cy="5" r="6" fill="${ac}"/>`;
+  if (o.hat === "flower") s += `<g fill="${ac}">${[0, 1, 2, 3, 4].map(i => `<circle cx="${124 + 6 * Math.cos(i * 1.2566)}" cy="${18 + 6 * Math.sin(i * 1.2566)}" r="4.5"/>`).join("")}</g><circle cx="124" cy="18" r="3.5" fill="#D9A441"/>`;
+  if (o.aid === "gold") s += `<path d="M${ex} 48Q${ex} 28 ${ex + 18} 22" fill="none" stroke="#D9A441" stroke-width="4" stroke-linecap="round"/><circle cx="${ex}" cy="54" r="5.5" fill="#D9A441" stroke="#3F5A2E" stroke-width="1.5"/>`;
+  s += `</g>`;
+  if (o.neck === "bow") s += `<path d="M100 104L84 96V112ZM100 104L116 96V112Z" fill="${ac}"/><circle cx="100" cy="104" r="5" fill="${ac}" stroke="#fff" stroke-width="1.5"/>`;
+  if (o.neck === "medal") s += `<path d="M90 98L100 124L110 98" fill="none" stroke="${ac}" stroke-width="4"/><circle cx="100" cy="128" r="9" fill="#D9A441" stroke="#8A6A00" stroke-width="2"/>`;
+  s += `</g>`;
+  if (ground) s += `<path d="M0 170V146Q30 136 66 142Q100 138 134 142Q170 136 200 146V170Z" fill="#6b4a2f"/><path d="M0 170V158Q50 150 100 156Q150 150 200 158V170Z" fill="#523823"/><circle cx="28" cy="150" r="3" fill="#523823"/><circle cx="172" cy="148" r="3.5" fill="#523823"/>`;
+  return s + `</svg>`;
+}
+
+/* ===== XP + your mole-rat (stored on this device only; no account) ===== */
+let xp = +store.get("hmo-xp") || 0, streak = 0, lastQ = null;
+const LEVEL = 50, MAXSTAGE = 7;
+const lvl = () => Math.floor(xp / LEVEL) + 1, stageOf = () => Math.min(MAXSTAGE, Math.floor(xp / LEVEL));
+const girth = () => 1 + stageOf() * .07;   // gets rounder every level
+let mine = { skin: "pink", glasses: "none", aid: "none", hat: "none", neck: "none", accent: "moss", name: "Moley" };
+try { Object.assign(mine, JSON.parse(store.get("hmo-mole") || "{}")); } catch (_) {}
+const saveMine = () => store.set("hmo-mole", JSON.stringify(mine));
+function showXP() { $("xpn").textContent = xp + " XP"; $("chipname").textContent = mine.name; $("xpchip").setAttribute("aria-label", `Open ${mine.name}, your mole rat`); $("minimole").innerHTML = moleSVG(mine, girth(), false); $("qremi").innerHTML = moleSVG(mine, girth(), true); }
+function addXP(n) {
+  const before = lvl(); xp += n; store.set("hmo-xp", xp); showXP();
+  const c = $("xpchip"); c.classList.remove("pulse"); void c.offsetWidth; c.classList.add("pulse");
+  return lvl() > before;
+}
+$("xpchip").onclick = () => {
+  const into = xp % LEVEL, top = stageOf() >= MAXSTAGE;
+  $("gname").value = mine.name; $("gplant").innerHTML = moleSVG(mine, girth(), true);
+  $("glevel").textContent = `${mine.name} · Level ${lvl()}`;
+  $("gbar").style.width = (top ? 100 : into / LEVEL * 100) + "%";
+  $("gtext").textContent = top ? `${xp} XP · as round as it gets` : `${xp} XP · ${LEVEL - into} XP until ${mine.name} gets rounder`;
+  $("gnext").textContent = nextUnlock(); drawCust(); drawBadges(); $("garden").showModal();
+};
+$("gname").oninput = e => { mine.name = e.target.value.slice(0, 16).trim() || "Moley"; saveMine(); showXP(); $("glevel").textContent = `${mine.name} · Level ${lvl()}`; };
+function drawCust() {
+  const box = $("gcust"); box.textContent = "";
+  const row = (title, items, key) => {
+    const r = el("div", "", "crow"), w = el("div", "", "copts"); r.append(el("b", title), w);
+    items.forEach(([id, label, lv, color]) => {
+      const ok = lvl() >= lv, b = el("button", "", "opt"), t = (mine[key] === id ? "✓ " : "") + label + (ok ? "" : " · Level " + lv);
+      if (color) { const sw = el("i"); sw.style.background = color; b.append(sw, el("span", t)); } else b.textContent = t;
+      b.disabled = !ok; b.setAttribute("aria-pressed", mine[key] === id);
+      b.onclick = () => { mine[key] = id; saveMine(); showXP(); $("gplant").innerHTML = moleSVG(mine, girth(), true); drawCust(); };
+      w.append(b);
+    });
+    box.append(r);
+  };
+  row("Skin", SKINS.map(x => [x.id, cap(x.id), x.lv, x.m]), "skin");
+  row("Glasses", CHOICES.glasses, "glasses"); row("Hearing aid", CHOICES.aid, "aid");
+  row("Hat", CHOICES.hat, "hat"); row("Neck", CHOICES.neck, "neck");
+  row("Accent color (hat and neck)", ACCENTS.map(x => [x.id, cap(x.id), x.lv, x.c]), "accent");
+}
+$("gclose").onclick = () => $("garden").close();
+showXP();
+
+/* ===== Badges: for learning habits, not just right answers. Saved on this device only. ===== */
+const BADGES = {
+  sprout: ["First sprout", "Answered your first question"], think: ["Deep thinker", "Wrote a reflection"],
+  roll: ["On a roll", "3 correct in a row"], poly: ["Bilingual", "Read captions in another language"],
+  back: ["Back-reader", "Looked back at the transcript"], bloom: ["Plump and proud", "Reached the roundest size"],
+};
+const got = new Set((store.get("hmo-badges") || "").split(",").filter(Boolean));
+function toast(t) { const e = $("toast"); e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { e.hidden = true; }, 3500); }
+function award(id) { if (got.has(id)) return; got.add(id); store.set("hmo-badges", [...got].join(",")); toast("Badge earned: " + BADGES[id][0]); }
+function drawBadges() {
+  const ul = $("gbadges"); ul.textContent = "";
+  Object.entries(BADGES).forEach(([id, [name, how]]) => {
+    const li = el("li", "", got.has(id) ? "on" : ""); li.append(el("b", name + (got.has(id) ? " ✓" : "")), el("span", got.has(id) ? "Earned" : how)); ul.append(li);
+  });
+}
+
+/* ===== Quiz me: only on request, only from the last 30 seconds of captions =====
+   makeQuestion() runs here in the page so the demo works alone. A server/LLM can replace it later:
+   send windowSegs() text, get back an object shaped like the ones below. */
+const finals = new Map();            // segment_id -> { t: when it finished, m: the caption }
+const windowSegs = () => { const cut = lnow() - 30000;   // 30 seconds of lecture time, so pausing never empties it
+   return [...finals.values()].filter(f => f.t >= cut).sort((a, b) => a.t - b.t).map(f => f.m); };
+const clean = w => w.replace(/[^\p{L}\p{N}'-]/gu, "");
+const bigWords = t => [...new Set(t.split(/\s+/).map(clean).filter(w => w.length >= 6))];
+const shuffle = a => a.map(x => [Math.random(), x]).sort((u, v) => u[0] - v[0]).map(x => x[1]);
+const el = (tag, txt, cls) => { const e = document.createElement(tag); if (txt) e.textContent = txt; if (cls) e.className = cls; return e; };
+
+/* Question kinds the student can switch on or off (saved on this device) */
+const used = new Set(); let lastKind = null;   // sentences already asked about, and the last kind of question
+const KINDS = [["blank", "Fill the blank"], ["tf", "True or false"], ["who", "Who said it?"], ["prev", "Last answer"], ["think", "What do you think?"]];
+let kinds = new Set(KINDS.map(k => k[0]));
+try { const sv = JSON.parse(store.get("hmo-kinds") || "null"); if (Array.isArray(sv) && sv.length) kinds = new Set(sv.filter(k => KINDS.some(x => x[0] === k))); } catch (_) {}
+function drawKinds() {
+  const box = $("qtypes"); box.textContent = "";
+  KINDS.forEach(([id, label]) => {
+    const b = el("button", (kinds.has(id) ? "✓ " : "") + label, "opt"); b.setAttribute("aria-pressed", kinds.has(id));
+    b.onclick = () => {
+      if (kinds.has(id) && kinds.size === 1) { toast("Keep at least one question type on."); return; }
+      if (kinds.has(id)) kinds.delete(id); else kinds.add(id);
+      store.set("hmo-kinds", JSON.stringify([...kinds])); drawKinds();
+    };
+    box.append(b);
+  });
+}
+
+function makeQuestion() {
+  const all = windowSegs(); if (!all.length) return null;
+  const withWords = all.filter(m => bigWords(pick(m).main).length), base = withWords.length ? withWords : all;
+  const fresh = base.filter(x => !used.has(x.segment_id)), src = fresh.length ? fresh : base;   // prefer sentences not asked yet
+  const m = src[src.length - 1], text = pick(m).main, words = bigWords(text);
+  const answer = words.length ? [...words].sort((a, b) => b.length - a.length)[0] : null;
+  const pool = answer ? [...new Set([...finals.values()].flatMap(f => bigWords(pick(f.m).main)))].filter(w => w.toLowerCase() !== answer.toLowerCase()) : [];
+  const others = shuffle(pool).slice(0, 2), speakers = [...new Set([...finals.values()].map(f => f.m.speaker))];
+  const make = {
+    blank: () => answer && others.length >= 2 && { kind: "blank", xp: 10, prompt: "What did the professor just say? Fill in the blank.", context: text.replace(answer, "_____"), answer, others, options: shuffle([answer, ...others]) },
+    tf: () => { if (!answer || !others.length) return false; const real = Math.random() < .5;
+      return { kind: "tf", xp: 10, prompt: "True or false: was this just said?", context: real ? text : text.replace(answer, others[0]), answer: real ? "True" : "False", options: ["True", "False"] }; },
+    who: () => speakers.length >= 2 && { kind: "who", xp: 10, prompt: "Who said this?", context: text, answer: m.speaker, options: shuffle([m.speaker, ...speakers.filter(x => x !== m.speaker).slice(0, 3)]) },
+    prev: () => lastQ && { kind: "prev", xp: 15, prompt: "On the previous question, what was the answer?", context: lastQ.shown, answer: lastQ.answer, options: shuffle([lastQ.answer, ...lastQ.others]) },
+    think: () => ({ kind: "think", xp: 20, prompt: "What do you think?", context: `The professor said: “${text}”`, ask: true }),
+  };
+  let options = [...kinds].map(k => make[k]()).filter(Boolean);
+  if (options.length > 1) options = options.filter(o => o.kind !== lastKind);   // never the same kind twice in a row
+  if (!options.length) return null;
+  const ch = options[Math.floor(Math.random() * options.length)];
+  used.add(m.segment_id); lastKind = ch.kind; return ch;
+}
+
+let q = null;
+function renderQ() {
+  $("qremi").classList.remove("hop", "wob");
+  const b = $("qbody"); b.textContent = ""; $("qfb").textContent = ""; $("qnext").hidden = true;
+  if (!q) { b.append(el("p", "Not enough in the last 30 seconds for those question types yet. Listen a little longer, or turn on more types above, then tap Another question.")); $("qnext").hidden = false; return; }
+  b.append(el("h3", q.prompt)); if (q.context) b.append(el("blockquote", q.context));
+  if (q.ask) {
+    const t = document.createElement("textarea"); t.rows = 3; t.setAttribute("aria-label", "Your answer"); t.placeholder = "Why might this matter? Say it in your own words.";
+    const go = el("button", "Submit", "primary"); go.disabled = true;
+    t.oninput = () => { go.disabled = t.value.trim().length < 3; };
+    go.onclick = () => { t.disabled = go.disabled = true; reward(q.xp, true, "Thanks for thinking it through. There's no wrong answer here."); };
+    b.append(t, go);
+  } else {
+    const box = el("div", "", "opts");
+    q.options.forEach(o => {
+      const bt = el("button", o);
+      bt.onclick = () => {
+        box.querySelectorAll("button").forEach(x => x.disabled = true);
+        const ok = o === q.answer; bt.classList.add(ok ? "right" : "wrong");
+        if (q.kind === "blank") lastQ = { shown: q.context, answer: q.answer, others: q.others };
+        reward(ok ? q.xp : 2, ok, ok ? "Correct!" : `Not quite. The answer was “${q.answer}”.`);
+      };
+      box.append(bt);
+    });
+    b.append(box);
+  }
+}
+function reward(base, ok, msg) {
+  streak = ok ? streak + 1 : 0;
+  const bonus = ok ? Math.min(10, (streak - 1) * 2) : 0, gain = base + bonus, grew = addXP(gain);
+  $("qfb").textContent = `${msg} +${gain} XP` + (bonus ? ` (streak bonus +${bonus})` : "") + (grew ? ` · Level ${lvl()}! Your mole rat got rounder!` : "");
+  $("qnext").hidden = false; react(ok ? "hop" : "wob");
+  award("sprout"); if (q && q.kind === "think") award("think"); if (streak >= 3) award("roll"); if (stageOf() >= MAXSTAGE) award("bloom");
+  lecture.answered++;
+  if (grew) { const u = unlocksAt(lvl()); if (u.length) toast("New unlock: " + u.join(", ")); }
+}
+function react(cls) { const r = $("qremi"); r.classList.remove("hop", "wob"); void r.offsetWidth; r.classList.add(cls); }
+function setQuiz(on) {
+  if (on) only("quiz");
+  document.body.classList.toggle("quiz-open", on); $("quizbtn").setAttribute("aria-pressed", on);
+  if (on) { q = makeQuestion(); renderQ(); }
+  syncSide();
+}
+$("quizbtn").onclick = () => setQuiz(!document.body.classList.contains("quiz-open"));
+$("qnext").onclick = () => { q = makeQuestion(); renderQ(); };
+$("qclose").onclick = $("qx").onclick = () => setQuiz(false);
+$("trclose").onclick = () => setTr(false);
+drawKinds();
+
+/* ===== Remi peeking out of the ground, looking at you. Inline SVG so the head can rise out of the dirt. ===== */
+document.querySelectorAll(".peekslot:not(#qremi)").forEach(n => { n.innerHTML = moleSVG(REMI, 1.3, true); });   // Remi: rounder, with glasses and a hearing aid
+
+/* Your own art: images/remi.(svg|png) replaces the small header mole; images/remi-peek.(svg|png) replaces the peeking one */
+function useMascotFile(sel, files, inSlot) {
+  if (!files.length) return;
+  const im = new Image();
+  im.onload = () => document.querySelectorAll(sel).forEach(t => {
+    const el = document.createElement("img"); el.src = im.src; el.alt = ""; el.setAttribute("aria-hidden", "true"); el.style.objectFit = "contain";
+    if (inSlot) t.replaceChildren(el); else { el.className = t.getAttribute("class") || ""; t.replaceWith(el); }
+  });
+  im.onerror = () => useMascotFile(sel, files.slice(1), inSlot);
+  im.src = files[0];
+}
+useMascotFile("svg.logo", ["images/remi.svg", "images/remi.png"], false);
+useMascotFile(".peekslot:not(#qremi)", ["images/remi-peek.svg", "images/remi-peek.png"], true);
+
+addEventListener("resize", () => { sizeSlide(); applySize(); });
+if (document.fonts) document.fonts.ready.then(fillStage);
+redrawAll();
+if (location.protocol === "file:" || params.get("demo") === "1") setDemo(true); else connect();
+</script>
+</body>
+</html>
