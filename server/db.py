@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 from bson import ObjectId
-from pymongo import ASCENDING, MongoClient
+from pymongo import ASCENDING, MongoClient, ReturnDocument
 
 MONGODB_URI = "mongodb+srv://eobane_db_user:bMYuKjr9sP0X1cjP@cluster0.eolnuma.mongodb.net"
 MONGODB_DATABASE = "lecture_app"
@@ -22,6 +22,7 @@ if not _mongo_uri:
 _client = MongoClient(_mongo_uri)
 _database = _client[os.getenv("MONGODB_DATABASE", MONGODB_DATABASE)]
 _users = _database["users"]
+_auth_sessions = _database["auth_sessions"]
 _sessions = _database["sessions"]
 _segments = _database["transcript_segments"]
 _slides = _database["slides"]
@@ -32,7 +33,14 @@ _users.update_many(
     {"level": {"$exists": False}},
     {"$set": {"level": 1}},
 )
+_users.update_many(
+    {"xp": {"$exists": False}},
+    {"$set": {"xp": 0}},
+)
 
+_users.create_index([("username", ASCENDING)], unique=True)
+_auth_sessions.create_index([("token_hash", ASCENDING)], unique=True)
+_auth_sessions.create_index("expires_at", expireAfterSeconds=0)
 # Prevent duplicate segment numbers within a session
 _segments.create_index(
     [("session_id", ASCENDING), ("segment_id", ASCENDING)],
@@ -41,6 +49,67 @@ _segments.create_index(
 _segments.create_index([("session_id", ASCENDING), ("start_ms", ASCENDING)])
 _segments.create_index([("text", "text")])
 _slides.create_index([("session_id", ASCENDING)])
+
+
+def create_user(username: str, password_hash: str) -> dict:
+    now = datetime.now(timezone.utc)
+    result = _users.insert_one(
+        {
+            "username": username,
+            "password_hash": password_hash,
+            "xp": 0,
+            "level": 1,
+            "created_at": now,
+            "updated_at": now,
+        }
+    )
+    return _users.find_one({"_id": result.inserted_id})
+
+
+def get_user_by_username(username: str) -> dict | None:
+    return _users.find_one({"username": username})
+
+
+def create_auth_session(user_id: str, token_hash: str, expires_at: datetime) -> None:
+    _auth_sessions.insert_one(
+        {
+            "user_id": ObjectId(user_id),
+            "token_hash": token_hash,
+            "expires_at": expires_at,
+        }
+    )
+
+
+def get_user_for_auth_session(token_hash: str) -> dict | None:
+    session = _auth_sessions.find_one(
+        {"token_hash": token_hash, "expires_at": {"$gt": datetime.now(timezone.utc)}}
+    )
+    return _users.find_one({"_id": session["user_id"]}) if session else None
+
+
+def delete_auth_session(token_hash: str) -> None:
+    _auth_sessions.delete_one({"token_hash": token_hash})
+
+
+def add_user_xp(user_id: str, amount: int) -> dict | None:
+    user_id_object = ObjectId(user_id)
+    return _users.find_one_and_update(
+        {"_id": user_id_object},
+        [
+            {
+                "$set": {
+                    "xp": {"$add": [{"$ifNull": ["$xp", 0]}, amount]},
+                    "updated_at": datetime.now(timezone.utc),
+                }
+            },
+            {
+                "$set": {
+                    "level": {"$add": [{"$floor": {"$divide": ["$xp", 50]}}, 1]}
+                }
+            },
+        ],
+        return_document=ReturnDocument.AFTER,
+    )
 
 
 def _session_object_id(session_id: str) -> ObjectId:

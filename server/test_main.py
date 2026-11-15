@@ -6,6 +6,9 @@ recognizer, so it runs in seconds without Whisper.
 
 import sys
 import types
+from datetime import datetime
+
+from pymongo.errors import DuplicateKeyError
 
 import pytest
 from bson import ObjectId
@@ -18,6 +21,37 @@ class FakeDB(types.ModuleType):
 
     def reset(self):
         self.sessions, self.segments, self.slides = [], {}, {}
+        self.users, self.auth_sessions = {}, {}
+
+    def create_user(self, username, password_hash):
+        if any(user["username"] == username for user in self.users.values()):
+            raise DuplicateKeyError("duplicate username")
+        user = {"_id": ObjectId(), "username": username, "password_hash": password_hash,
+                "xp": 0, "level": 1}
+        self.users[str(user["_id"])] = user
+        return user
+
+    def get_user_by_username(self, username):
+        return next((u for u in self.users.values() if u["username"] == username), None)
+
+    def create_auth_session(self, user_id, token_hash, expires_at):
+        self.auth_sessions[token_hash] = (user_id, expires_at)
+
+    def get_user_for_auth_session(self, token_hash):
+        session = self.auth_sessions.get(token_hash)
+        if not session or session[1] <= datetime.now(session[1].tzinfo):
+            return None
+        return self.users.get(session[0])
+
+    def delete_auth_session(self, token_hash):
+        self.auth_sessions.pop(token_hash, None)
+
+    def add_user_xp(self, user_id, amount):
+        user = self.users.get(user_id)
+        if user:
+            user["xp"] += amount
+            user["level"] = user["xp"] // 50 + 1
+        return user
 
     def create_session(self, title=None):
         sid = str(ObjectId())
@@ -73,6 +107,7 @@ def one_event_loop():
 @pytest.fixture(autouse=True)
 def clean():
     fake_db.reset()
+    client.cookies.clear()
     main.lecture_started.clear()
     main.rooms.clear()
 
@@ -97,6 +132,37 @@ class FakeStream:
 def test_serves_the_page():
     r = client.get("/")
     assert r.status_code == 200 and "LevelUp Live" in r.text
+
+
+def test_account_signup_login_xp_and_logout():
+    created = client.post("/auth/register", json={"username": "Ada", "password": "secure-pass-123"})
+    assert created.status_code == 200
+    assert created.json()["username"] == "ada"
+    assert created.json()["xp"] == 0
+    assert "password_hash" not in created.json()
+    assert created.cookies.get("levelup_session")
+    assert created.headers["set-cookie"].lower().find("httponly") >= 0
+
+    assert client.get("/auth/me").json()["id"] == created.json()["id"]
+    progress = client.post("/auth/me/xp", json={"xp_delta": 30})
+    assert progress.status_code == 200 and progress.json()["xp"] == 30
+    progress = client.post("/auth/me/xp", json={"xp_delta": 20})
+    assert progress.json()["xp"] == 50 and progress.json()["level"] == 2
+
+    client.post("/auth/logout")
+    assert client.get("/auth/me").status_code == 401
+    signed_in = client.post("/auth/login", json={"username": "ADA", "password": "secure-pass-123"})
+    assert signed_in.status_code == 200 and signed_in.json()["xp"] == 50
+    assert client.post("/auth/me/xp", json={"xp_delta": 31}).status_code == 422
+    client.post("/auth/logout")
+    assert client.post("/auth/me/xp", json={"xp_delta": 1}).status_code == 401
+
+
+def test_account_login_rejects_bad_password_and_duplicate_username():
+    assert client.post("/auth/register", json={"username": "ada", "password": "secure-pass-123"}).status_code == 200
+    assert client.post("/auth/register", json={"username": "ADA", "password": "another-pass-123"}).status_code == 409
+    client.post("/auth/logout")
+    assert client.post("/auth/login", json={"username": "ada", "password": "wrong-pass-123"}).status_code == 401
 
 
 def test_create_session_and_latest():

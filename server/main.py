@@ -1,19 +1,25 @@
 # server/main.py
 import asyncio
 import json
+import hashlib
 import os
+import re
+import secrets
 import sys
 import time
 import traceback
 from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from bson import ObjectId
-from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, Request, Response, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from pymongo.errors import DuplicateKeyError
 from starlette.concurrency import run_in_threadpool
 
+import auth
 import db
 import quiz
 from middleware import configure_middleware
@@ -31,6 +37,9 @@ QUIZ_MIN_WORDS = 40        # ...extended back until there's enough to ask about
 # Create the FastAPI application and attach shared HTTP middleware.
 app = FastAPI()
 configure_middleware(app)
+AUTH_COOKIE = "levelup_session"
+AUTH_SESSION_DAYS = 14
+MAX_XP_REWARD = 30
 
 # used to keep track of which connected clients are watching which lecture sessions
 rooms: dict[str, set[WebSocket]] = defaultdict(set)
@@ -49,6 +58,116 @@ _background: set = set()  # running translation tasks (kept so they aren't garba
 def index():
     # The page uses relative URLs, so it must be served by this server.
     return FileResponse(ROOT / "index.html")
+
+
+def _username(value: object) -> str:
+    if not isinstance(value, str):
+        raise HTTPException(status_code=422, detail="username is required")
+    username = value.strip().lower()
+    if not re.fullmatch(r"[a-z0-9._-]{3,32}", username):
+        raise HTTPException(
+            status_code=422,
+            detail="username must be 3-32 characters: letters, numbers, '.', '_' or '-'",
+        )
+    return username
+
+
+def _public_user(user: dict) -> dict:
+    return {
+        "id": str(user["_id"]),
+        "username": user["username"],
+        "xp": int(user.get("xp", 0)),
+        "level": int(user.get("level", 1)),
+    }
+
+
+def _start_auth_session(user: dict, request: Request, response: Response) -> dict:
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=AUTH_SESSION_DAYS)
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    db.create_auth_session(str(user["_id"]), token_hash, expires_at)
+    response.set_cookie(
+        key=AUTH_COOKIE,
+        value=token,
+        max_age=AUTH_SESSION_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+        path="/",
+    )
+    return _public_user(user)
+
+
+def _current_user(request: Request) -> dict:
+    token = request.cookies.get(AUTH_COOKIE)
+    if not token:
+        raise HTTPException(status_code=401, detail="Please sign in")
+    token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    user = db.get_user_for_auth_session(token_hash)
+    if not user:
+        raise HTTPException(status_code=401, detail="Please sign in")
+    return user
+
+
+@app.post("/auth/register")
+def register(body: dict, request: Request, response: Response):
+    username = _username(body.get("username"))
+    password = body.get("password")
+    if not isinstance(password, str) or not 8 <= len(password) <= 128:
+        raise HTTPException(status_code=422, detail="password must be 8-128 characters")
+    try:
+        user = db.create_user(username, auth.hash_password(password))
+    except DuplicateKeyError as exc:
+        raise HTTPException(status_code=409, detail="That username is already taken") from exc
+    return _start_auth_session(user, request, response)
+
+
+@app.post("/auth/login")
+def login(body: dict, request: Request, response: Response):
+    try:
+        username = _username(body.get("username"))
+    except HTTPException as exc:
+        raise HTTPException(status_code=401, detail="Invalid username or password") from exc
+    password = body.get("password")
+    if not isinstance(password, str) or not 1 <= len(password) <= 128:
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    user = db.get_user_by_username(username)
+    if not user or not auth.verify_password(password, user.get("password_hash", "")):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+    return _start_auth_session(user, request, response)
+
+
+@app.get("/auth/me")
+def current_account(request: Request):
+    return _public_user(_current_user(request))
+
+
+@app.post("/auth/logout")
+def logout(request: Request, response: Response):
+    token = request.cookies.get(AUTH_COOKIE)
+    if token:
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        db.delete_auth_session(token_hash)
+    response.delete_cookie(
+        AUTH_COOKIE,
+        path="/",
+        httponly=True,
+        secure=request.url.scheme == "https",
+        samesite="lax",
+    )
+    return {"ok": True}
+
+
+@app.post("/auth/me/xp")
+def add_account_xp(body: dict, request: Request):
+    user = _current_user(request)
+    amount = body.get("xp_delta")
+    if isinstance(amount, bool) or not isinstance(amount, int) or not 1 <= amount <= MAX_XP_REWARD:
+        raise HTTPException(status_code=422, detail=f"xp_delta must be an integer from 1 to {MAX_XP_REWARD}")
+    updated = db.add_user_xp(str(user["_id"]), amount)
+    if not updated:
+        raise HTTPException(status_code=404, detail="User account no longer exists")
+    return _public_user(updated)
 
 
 # Optional mascot art and fonts that index.html looks for next to itself (if present;

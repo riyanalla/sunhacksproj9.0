@@ -59,11 +59,27 @@ be pressed on the laptop running the server.
 
 Test without a mic: `python tools/fake_emitter.py` (prints a link to open).
 
+## Accounts and XP
+
+The app prompts for a username and password. New accounts are saved in MongoDB's `users`
+collection with a salted PBKDF2 password hash, XP, and level; raw passwords are not stored.
+Login uses an HTTP-only session cookie, with only a hash of the session token stored in
+`auth_sessions`. XP earned from quizzes is written to the signed-in user's account. Usernames
+are case-insensitive; they must be 3-32 letters, numbers, dots, underscores, or hyphens, and
+passwords must be 8-128 characters.
+
+Open the XP badge to name and customize your mole rat. Its body grows with the account's XP;
+appearance and badges are stored locally in the browser, per signed-in username. Starting a
+recording while Demo is active exits the sample lecture and creates a fresh lecture session.
+
+The standalone `?demo=1` mode remains local-only. Google sign-in is not configured; adding it
+requires a Google OAuth client and authorized callback URL, plus server-side OAuth handling.
+
 ## Tests
 
 ```
 python -m pytest nlp                      # speech/vocabulary pieces
-cd server && python -m pytest test_main.py   # server, with an in-memory database (no MongoDB)
+cd server && python -m pytest test_main.py test_auth.py   # server/auth, with an in-memory database (no MongoDB)
 ```
 
 ## Settings (environment variables)

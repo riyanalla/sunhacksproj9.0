@@ -105,8 +105,9 @@
   button:focus-visible, select:focus-visible { outline: 3px solid var(--ochre); outline-offset: 2px; }
 
   .chip { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,.14); color: #fff; border: 1.5px solid rgba(255,255,255,.6); border-radius: 999px; padding: 2px 12px 2px 6px; font: inherit; font-size: 15px; }
-  .chip svg { width: 24px; height: 32px; display: block; }
+  .chip svg { width: 38px; height: 32px; display: block; }
   button.primary { background: var(--moss); color: #fff; border-color: var(--moss); }
+  .chiplabel { font-weight: 700; }
   #slidecap { display: flex; align-items: center; justify-content: center; gap: 12px; }
   #slidecap button { font: inherit; color: var(--text); background: transparent; border: 2px solid var(--line); border-radius: 8px; padding: 2px 12px; min-height: 32px; }
   dialog { border: 2px solid var(--moss); border-radius: 14px; background: var(--panel); color: var(--text); width: min(560px, 92vw); padding: 18px; font-family: inherit; }
@@ -123,8 +124,31 @@
   #qfb { margin: 12px 0 0; font-weight: 700; min-height: 1.4em; }
   .gnote { color: var(--muted); font-size: 14px; margin: 10px 0 0; } .gcenter { text-align: center; margin: 8px 0; font-weight: 700; }
   .qrow { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
-  #gplant svg { width: 190px; height: 250px; display: block; margin: 0 auto; }
+  #gplant svg { width: 240px; height: 204px; display: block; margin: 0 auto; }
   #gbarwrap { height: 14px; border-radius: 7px; background: var(--line); overflow: hidden; } #gbar { height: 100%; background: var(--moss); }
+  #qremi { width: 110px; height: 94px; margin: 0 auto 6px; }
+  #qremi .head { transform-box: fill-box; transform-origin: 50% 100%; }
+  #qremi.hop .head { animation: mole-hop .7s ease-out; }
+  #qremi.wob .head { animation: mole-wob .7s ease-in-out; }
+  @keyframes mole-hop { 0%, 100% { transform: translateY(0); } 30% { transform: translateY(-14px); } 60% { transform: translateY(0); } 80% { transform: translateY(-6px); } }
+  @keyframes mole-wob { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-5deg); } 75% { transform: rotate(5deg); } }
+  .chip.pulse { animation: mole-pulse .5s ease-out; }
+  @keyframes mole-pulse { 0% { transform: scale(1); } 40% { transform: scale(1.12); } 100% { transform: scale(1); } }
+  #toast { position: fixed; left: 50%; top: calc(70px + env(safe-area-inset-top, 0px)); transform: translateX(-50%); z-index: 20; background: var(--moss); color: #fff; border: 2px solid var(--ochre); border-radius: 999px; padding: 10px 18px; font-weight: 700; max-width: 90vw; text-align: center; }
+  #gbadges { list-style: none; padding: 0; margin: 8px 0 0; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  #gbadges li { border: 2px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 14px; color: var(--muted); }
+  #gbadges li.on { border-color: var(--moss); background: rgba(63,90,46,.14); color: var(--text); }
+  #gbadges b { display: block; font-size: 15px; }
+  .gl { display: block; font-size: 14px; color: var(--muted); margin: 10px 0 4px; }
+  #gname { width: 100%; font: inherit; font-size: 17px; padding: 9px 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); }
+  .crow { margin-top: 12px; }
+  .copts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 4px; }
+  .opt { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 6px 10px; font-size: 15px; }
+  .opt i { width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line); display: inline-block; }
+  .opt[aria-pressed="true"] { border-color: var(--moss); background: rgba(63,90,46,.16); font-weight: 700; }
+  .opt:disabled { opacity: .5; }
+  dialog { max-height: 90vh; overflow-y: auto; }
+  .bh { margin: 14px 0 0; }
 
     /* Loading screen */
   #loader { position: fixed; inset: 0; z-index: 10; background: var(--moss); color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 24px; text-align: center; transition: opacity .35s; }
@@ -139,9 +163,38 @@
   #loader p { margin: 0; font-size: 18px; color: #e5ecd9; }
   @keyframes bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-8px) rotate(2deg); } }
   @media (prefers-reduced-motion: reduce) { .peekslot .head, #cur.enter { animation: none; } #loader { transition: none; } }
+  #auth-screen { position: fixed; inset: 0; z-index: 20; display: none; place-items: safe center; overflow-y: auto; padding: 24px; background: var(--bg); }
+  body.auth-pending #auth-screen, body.auth-required #auth-screen { display: grid; }
+  body.auth-pending > :not(#auth-screen):not(script), body.auth-required > :not(#auth-screen):not(script) { visibility: hidden; }
+  .auth-card { width: min(440px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; padding: 28px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); box-shadow: 0 12px 40px rgba(30,26,18,.16); }
+  .auth-card h2 { margin: 0 0 8px; font: 700 30px Georgia, "Times New Roman", serif; }
+  .auth-card p { color: var(--muted); line-height: 1.45; }
+  .auth-card label { display: block; margin-top: 16px; font-weight: 700; }
+  .auth-card input { width: 100%; margin-top: 6px; padding: 12px; border: 2px solid var(--line); border-radius: 9px; background: var(--bg); color: var(--text); font: inherit; font-size: 17px; }
+  .auth-card button { width: 100%; margin-top: 16px; padding: 11px 14px; border: 2px solid var(--moss); border-radius: 9px; background: var(--moss); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
+  .auth-card button.secondary { background: transparent; color: var(--text); border-color: var(--line); }
+  #auth-error { min-height: 1.4em; color: #A8482C; font-weight: 700; }
+  #account-name { font-size: 14px; }
+  #logout { font: inherit; font-size: 14px; color: #fff; background: transparent; border: 1.5px solid rgba(255,255,255,.6); border-radius: 8px; padding: 6px 9px; }
 </style>
 </head>
-<body>
+<body class="auth-pending">
+<main id="auth-screen">
+  <section class="auth-card" aria-labelledby="auth-title">
+    <h2 id="auth-title">Welcome to LevelUp Live</h2>
+    <p id="auth-description">Sign in to start a new lecture and see your mole rat's progress.</p>
+    <form id="auth-form">
+      <label for="auth-username">Username</label>
+      <input id="auth-username" name="username" autocomplete="username" minlength="3" maxlength="32" required>
+      <label for="auth-password">Password</label>
+      <input id="auth-password" name="password" type="password" autocomplete="current-password" minlength="8" maxlength="128" required>
+      <p id="auth-error" role="alert"></p>
+      <button id="auth-submit" type="submit">Sign in</button>
+    </form>
+    <button id="auth-toggle" class="secondary" type="button">Create an account</button>
+    <!-- <p>Google sign-in is not enabled yet; it requires Google OAuth credentials and a server callback.</p> -->
+  </section>
+</main>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
   <symbol id="mole" viewBox="0 0 134 90">
     <path d="M14 60Q2 56 4 44" fill="none" stroke="#D49A8A" stroke-width="5" stroke-linecap="round"/>
@@ -170,7 +223,8 @@
   <h1>LevelUp Live</h1>
   <div class="sp"></div>
   <div id="status" role="status" aria-live="polite"><span id="dot"></span><span id="stext">Connecting…</span></div>
-  <button id="xpchip" class="chip" aria-label="Open your garden"><span id="miniplant"></span><b id="xpn">0 XP</b></button>
+  <button id="xpchip" class="chip" aria-label="Open your mole rat"><span id="minimole"></span><span class="chiplabel" id="chipname">Moley</span><b id="xpn">0 XP</b></button>
+  <span id="account-name"></span><button id="logout" type="button">Sign out</button>
   <select id="lang" aria-label="Caption language"></select>
 </header>
 
@@ -199,6 +253,7 @@
     <section id="quiz" aria-label="Quiz">
       <div class="phead"><h2>Quiz</h2><button class="x" id="qx" aria-label="Close quiz">✕</button></div>
       <div class="qpad">
+        <div id="qremi" class="peekslot" aria-hidden="true"></div>
         <div id="qbody"></div><p id="qfb" role="status"></p>
         <p class="gnote">Questions come from the last 30 seconds of captions, and only when you ask. Tapped by accident? Just close it.</p>
         <div class="qrow"><button id="qclose">Close</button><button id="qnext" class="primary" hidden>Another question</button></div>
@@ -221,11 +276,16 @@
 </footer>
 
 <dialog id="garden">
-  <h3>Your garden</h3><div id="gplant"></div>
-  <p id="glevel" class="gcenter"></p><div id="gbarwrap"><div id="gbar"></div></div><p id="gtext" class="gcenter"></p>
-  <p class="gnote">Your plant grows as you earn XP from quizzes. Your XP is saved on this device only.</p>
+  <h3>My Mole Rat</h3><div id="gplant"></div>
+  <label class="gl" for="gname">Name your mole rat</label><input id="gname" type="text" maxlength="16" autocomplete="off">
+  <p id="glevel" class="gcenter"></p><div id="gbarwrap"><div id="gbar"></div></div>
+  <p id="gtext" class="gcenter"></p><p id="gnext" class="gcenter"></p>
+  <h3 class="bh">Customize</h3><div id="gcust"></div>
+  <h3 class="bh">Badges</h3><ul id="gbadges"></ul>
+  <p class="gnote">Your mole rat grows rounder as you earn XP. XP is saved to your account; its name and accessories are saved on this device.</p>
   <div class="qrow"><button id="gclose">Close</button></div>
 </dialog>
+<div id="toast" role="status" hidden></div>
 
 <script>
 const params = new URLSearchParams(location.search);
@@ -233,6 +293,56 @@ let SESSION = params.get("s");   // MongoDB id from POST /sessions; null = join 
 const root = document.documentElement, $ = id => document.getElementById(id);
 const store = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
                 set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
+let guestMode = false, authMode = "login";
+
+async function readApiJson(response) {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.toLowerCase().includes("application/json")) {
+    throw new Error("This address returned a web page instead of the API. Open LevelUp Live from the FastAPI server (for example, http://localhost:8000), not a static-site URL.");
+  }
+  return response.json();
+}
+
+function setAuthMode(mode) {
+  authMode = mode;
+  const registering = mode === "register";
+  $("auth-title").textContent = registering ? "Create your account" : "Welcome to LevelUp Live";
+  $("auth-description").textContent = registering ? "Create an account to save your garden progress." : "Sign in to continue and save your garden progress.";
+  $("auth-submit").textContent = registering ? "Create account" : "Sign in";
+  $("auth-toggle").textContent = registering ? "I already have an account" : "Create an account";
+  $("auth-password").autocomplete = registering ? "new-password" : "current-password";
+  $("auth-error").textContent = "";
+}
+
+$("auth-toggle").onclick = () => setAuthMode(authMode === "login" ? "register" : "login");
+$("auth-form").onsubmit = async event => {
+  event.preventDefault();
+  $("auth-submit").disabled = true;
+  $("auth-error").textContent = "";
+  try {
+    const response = await fetch(`/auth/${authMode}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: $("auth-username").value,
+        password: $("auth-password").value
+      })
+    });
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.detail || "Could not sign in");
+    $("auth-password").value = "";
+    await launchApp(data);
+  } catch (error) {
+    $("auth-error").textContent = error.message || "Could not reach the server";
+  } finally {
+    $("auth-submit").disabled = false;
+  }
+};
+
+$("logout").onclick = async () => {
+  try { await fetch("/auth/logout", { method: "POST" }); }
+  finally { location.reload(); }
+};
 
 /* ===== Loading screen: at least 1 s, gives up after 6 s ===== */
 const loaderStart = Date.now();
@@ -245,7 +355,7 @@ let lang = store.get("hmo-lang") || (navigator.language || "en").slice(0, 2).toL
 if (!LANGS[lang]) lang = "en";
 $("lang").innerHTML = Object.entries(LANGS).map(([k, v]) => `<option value="${k}">${v}</option>`).join("");
 $("lang").value = lang;
-$("lang").onchange = e => { lang = e.target.value; store.set("hmo-lang", lang); redrawAll(); sendLang(); };
+$("lang").onchange = e => { lang = e.target.value; store.set("hmo-lang", lang); redrawAll(); sendLang(); if (lang !== "en") award("poly"); };
 // The server translates new captions into every language someone in the lecture picked.
 function sendLang() { try { if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "lang", lang })); } catch (_) {} }
 
@@ -401,6 +511,7 @@ function runDemo() {
   tick();
 }
 function setDemo(on) {
+  if (on && mic) stopListening();
   demoOn = on; $("demo").setAttribute("aria-pressed", on);
   if (on && store.get("hmo-slides") === null) slidesOn = false;   // demo starts without slides; tap Slides to add them
   clearTimeout(demoTimer); clearTimeout(reconnectTimer);
@@ -419,19 +530,30 @@ async function startListening() {
     return;
   }
   setListen("Starting…", true);
+  let stream = null, ctx = null;
+  const wasDemo = demoOn;
   try {
-    // Continue the lecture in the link, or start a new one.
-    if (!SESSION || !confirm("Continue this lecture? (Cancel starts a new one.)")) {
-      const d = await (await fetch("/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+    if (wasDemo) setDemo(false);
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextClass) throw new Error("Audio recording is not supported by this browser.");
+    ctx = new AudioContextClass();
+    const resumed = ctx.resume();
+    stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: true, autoGainControl: true } });
+    await resumed;
+    // Recording from demo always starts a clean lecture, not the sample transcript or a stale link.
+    if (wasDemo || !SESSION || !confirm("Continue the lecture already in this link and append to its transcript? Choose Cancel to start a new blank lecture.")) {
+      const response = await fetch("/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" });
+      const d = await readApiJson(response);
+      if (!response.ok || !d.session_id) throw new Error(d.detail || "Could not start a new lecture.");
       setSession(d.session_id);
     }
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: true, autoGainControl: true } });
-    const ctx = new AudioContext();
-    const tap = "class Tap extends AudioWorkletProcessor { process(i) { if (i[0][0]) this.port.postMessage(i[0][0].slice(0)); return true; } } registerProcessor('tap', Tap);";
+    const tap = "class Tap extends AudioWorkletProcessor { process(i, o) { if (i[0] && i[0][0]) this.port.postMessage(i[0][0].slice(0)); for (const c of (o[0] || [])) c.fill(0); return true; } } registerProcessor('tap', Tap);";
     await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([tap], { type: "text/javascript" })));
-    const node = new AudioWorkletNode(ctx, "tap", { numberOfOutputs: 0 });
-    mic = { stream, ctx, node, on: true, buf: new Float32Array(0), pos: 0, out: [], pending: [] };
-    const ratio = ctx.sampleRate / 16000;
+    const node = new AudioWorkletNode(ctx, "tap", { numberOfOutputs: 1, outputChannelCount: [1] });
+    const silent = ctx.createGain(); silent.gain.value = 0;
+    mic = { stream, ctx, node, silent, on: true, buf: new Float32Array(0), pos: 0, out: [], pending: [] };
+    stream = null; ctx = null;
+    const ratio = mic.ctx.sampleRate / 16000;
     node.port.onmessage = e => {               // average down to 16 kHz, send every 100 ms
       const m = mic; if (!m || !m.on) return;
       const b = new Float32Array(m.buf.length + e.data.length); b.set(m.buf); b.set(e.data, m.buf.length);
@@ -449,9 +571,19 @@ async function startListening() {
         if (m.ws && m.ws.readyState === 1) m.pending.splice(0).forEach(f => m.ws.send(f));
       }
     };
-    ctx.createMediaStreamSource(stream).connect(node);
+    const activeContext = mic.ctx;
+    activeContext.createMediaStreamSource(mic.stream).connect(node);
+    node.connect(silent); silent.connect(activeContext.destination);
     openMicSocket();
-  } catch (err) { stopListening(false); alert("Could not start listening: " + (err.message || err)); }
+  } catch (err) {
+    if (mic) stopListening(false);
+    else {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+      if (ctx && ctx.state !== "closed") ctx.close();
+      setListen("Start listening", false);
+    }
+    alert("Could not start listening: " + (err.message || err));
+  }
 }
 function openMicSocket() {
   if (!mic || !mic.on) return;
@@ -469,7 +601,7 @@ function stopListening(endLecture = true) {
   if (m) {
     m.on = false;
     if (m.ws) { if (endLecture && m.ws.readyState === 1) m.ws.send("stop"); setTimeout(() => m.ws.close(), 1000); }
-    m.stream.getTracks().forEach(t => t.stop()); m.ctx.close();
+    m.stream.getTracks().forEach(t => t.stop()); m.node.disconnect(); m.silent.disconnect(); m.ctx.close();
   }
   setListen("Start listening", false);
 }
@@ -496,7 +628,10 @@ function syncSide() {
   document.body.classList.toggle("side-open", document.body.classList.contains("tr-open") || document.body.classList.contains("quiz-open"));
   sizeSlide(); fillStage();
 }
-$("trbtn").onclick = () => setTr(!document.body.classList.contains("tr-open"));
+$("trbtn").onclick = () => {
+  const on = !document.body.classList.contains("tr-open"); setTr(on);
+  if (on) award("back");
+};
 setTr(innerWidth >= 820);
 
 
@@ -532,38 +667,148 @@ $("sprev").onclick = () => { if (si > 0) { si--; drawMySlide(); } };
 $("snext").onclick = () => { if (si < mySlides.length - 1) { si++; drawMySlide(); } };
 $("slidesbtn").onclick = () => { if (!hasSlide) picker.click(); else { slidesOn = !slidesOn; showSlides(); } };
 
-/* ===== XP + plant (stored on this device only) ===== */
-let xp = +store.get("hmo-xp") || 0, streak = 0, lastQ = null;
+/* ===== XP + mole-rat customization ===== */
+let xp = 0, streak = 0, lastQ = null;
 const LEVEL = 50, MAXSTAGE = 7;
 const lvl = () => Math.floor(xp / LEVEL) + 1, stageOf = () => Math.min(MAXSTAGE, Math.floor(xp / LEVEL));
-function plantSVG(stage) {
-  let g = '<ellipse cx="60" cy="150" rx="44" ry="9" fill="#6b4a2f"/>';
-  if (stage === 0) g += '<ellipse cx="60" cy="144" rx="7" ry="4.5" fill="#b0803f"/>';
-  else {
-    const h = 18 + stage * 15, n = Math.min(stage, 6), top = 148 - h;
-    g += `<path d="M60 148Q57 ${148 - h / 2} 60 ${top}" stroke="#4f7a3a" stroke-width="5" fill="none" stroke-linecap="round"/>`;
-    for (let i = 0; i < n; i++) {
-      const side = i % 2 ? 1 : -1, y = Math.round(140 - (i + 1) * (h - 12) / (n + 1)), x = 60 + side * 13;
-      g += `<ellipse cx="${x}" cy="${y}" rx="12" ry="6" transform="rotate(${side * -28} ${x} ${y})" fill="#6fa04b"/>`;
-    }
-    if (stage >= MAXSTAGE) {
-      for (let a = 0; a < 6; a++) g += `<circle cx="${60 + 9 * Math.cos(a * Math.PI / 3)}" cy="${top + 9 * Math.sin(a * Math.PI / 3)}" r="6" fill="#D9A441"/>`;
-      g += `<circle cx="60" cy="${top}" r="5" fill="#A8482C"/>`;
-    }
-  }
-  return `<svg viewBox="0 0 120 160" aria-hidden="true">${g}</svg>`;
+const SKINS = [
+  { id: "pink", m: "#EBB9A4", l: "#F0C5B2", d: "#D49A8A", lv: 1 }, { id: "tan", m: "#D9B38C", l: "#E6C7A5", d: "#B88F68", lv: 1 },
+  { id: "cocoa", m: "#B98A6B", l: "#CBA183", d: "#8F6448", lv: 1 }, { id: "grey", m: "#B9B2B0", l: "#CBC5C3", d: "#8E8785", lv: 3 },
+  { id: "rose", m: "#E7A3AC", l: "#F0B9C0", d: "#C47A86", lv: 5 }];
+const ACCENTS = [{ id: "moss", c: "#3F5A2E", lv: 1 }, { id: "ochre", c: "#D9A441", lv: 1 }, { id: "clay", c: "#A8482C", lv: 2 }, { id: "sky", c: "#2F5F7A", lv: 3 }, { id: "plum", c: "#6B3E62", lv: 4 }];
+const CHOICES = { glasses: [["none", "None", 1], ["round", "Round", 1], ["square", "Square", 2]], aid: [["none", "None", 1], ["gold", "Hearing aid", 1]],
+                  hat: [["none", "None", 1], ["beanie", "Beanie", 2], ["flower", "Flower", 4], ["grad", "Grad cap", 6], ["crown", "Crown", 8]], neck: [["none", "None", 1], ["bow", "Bow tie", 3], ["medal", "Medal", 5]] };
+const DEFAULT_MOLE = { skin: "pink", glasses: "none", aid: "none", hat: "none", neck: "none", accent: "moss", name: "Moley" };
+const cap = w => w[0].toUpperCase() + w.slice(1);
+const allUnlocks = () => [...SKINS.map(x => [x.lv, cap(x.id) + " skin"]), ...ACCENTS.map(x => [x.lv, cap(x.id) + " color"]), ...Object.values(CHOICES).flat().map(c => [c[2], c[1]])].filter(u => u[0] > 1);
+const unlocksAt = l => allUnlocks().filter(u => u[0] === l).map(u => u[1]);
+function nextUnlock() { const n = allUnlocks().filter(u => u[0] > lvl()).sort((a, b) => a[0] - b[0])[0]; return n ? `Next unlock: ${n[1]} at Level ${n[0]}` : "Everything is unlocked!"; }
+const girth = () => 1 + stageOf() * .07;
+let mine = { ...DEFAULT_MOLE }, profileKey = "hmo-mole", badgeKey = "hmo-badges";
+const saveMine = () => store.set(profileKey, JSON.stringify(mine));
+function moleSVG(o, g, ground) {
+  const k = SKINS.find(x => x.id === o.skin) || SKINS[0], ac = (ACCENTS.find(x => x.id === o.accent) || ACCENTS[0]).c;
+  const hs = 1 + (g - 1) * .25, by = 46 * (1 + (g - 1) * .5), L = 100 - 42 * g, R = 100 + 42 * g, ex = 100 - 56 * hs;
+  const ln = `fill="none" stroke="${k.d}" stroke-width="2" stroke-linecap="round"`, ink = `stroke="#2E2A22" stroke-width="3"`;
+  let s = `<svg viewBox="0 0 200 170" role="img" aria-label="${(o.name || "Mole-rat").replace(/[<>&"]/g, "")}"><g class="head">`;
+  s += `<ellipse cx="100" cy="112" rx="${54 * g}" ry="${by}" fill="${k.m}"/><ellipse cx="100" cy="124" rx="${34 * g}" ry="30" fill="${k.l}"/>`;
+  s += `<path d="M${100 - 36 * g} 104Q${100 - 26 * g} 112 ${100 - 34 * g} 122M${100 + 36 * g} 104Q${100 + 26 * g} 112 ${100 + 34 * g} 122M84 130Q100 136 116 130" ${ln}/>`;
+  s += `<path d="M${L} 98Q${L - 18} 118 ${L - 2} 136M${R} 98Q${R + 18} 118 ${R + 2} 136" fill="none" stroke="${k.m}" stroke-width="14" stroke-linecap="round"/>`;
+  s += `<g fill="${k.l}" stroke="${k.d}" stroke-width="1.5"><ellipse cx="${L - 1}" cy="138" rx="13" ry="8"/><ellipse cx="${R + 1}" cy="138" rx="13" ry="8"/></g>`;
+  s += `<path d="M${L - 9} 134v6M${L - 1} 132v8M${L + 7} 134v6M${R - 7} 134v6M${R + 1} 132v8M${R + 9} 134v6" ${ln}/>`;
+  s += `<g transform="translate(0 4)"><ellipse cx="100" cy="52" rx="${58 * hs}" ry="40" fill="${k.m}"/><ellipse cx="100" cy="64" rx="34" ry="24" fill="${k.l}"/>`;
+  s += `<path d="M78 24Q100 17 122 24M84 32Q100 27 116 32M62 38Q72 33 82 38M118 38Q128 33 138 38" ${ln}/>`;
+  s += `<circle cx="72" cy="44" r="3.8" fill="#3a1f26"/><circle cx="128" cy="44" r="3.8" fill="#3a1f26"/><circle cx="73.3" cy="42.7" r="1.2" fill="#fff"/><circle cx="129.3" cy="42.7" r="1.2" fill="#fff"/>`;
+  s += `<ellipse cx="100" cy="57" rx="8" ry="5.5" fill="#D98F85"/><rect x="92" y="70" width="8" height="17" rx="3" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/><rect x="100" y="70" width="8" height="17" rx="3" fill="#fff" stroke="#6B2A3A" stroke-width="1.6"/>`;
+  s += `<path d="M88 68Q100 74 112 68" fill="none" stroke="#7a3f45" stroke-width="2" stroke-linecap="round"/><path d="M72 62L50 58M72 67L48 69M128 62L150 58M128 67L152 69" stroke="#8a5a55" stroke-width="1.4" stroke-linecap="round"/>`;
+  if (o.glasses === "round") s += `<g fill="rgba(255,255,255,.35)" ${ink}><circle cx="72" cy="44" r="12"/><circle cx="128" cy="44" r="12"/></g><path d="M84 42Q100 36 116 42M60 42L46 38M140 42L154 38" fill="none" ${ink} stroke-linecap="round"/>`;
+  if (o.glasses === "square") s += `<g fill="rgba(255,255,255,.35)" ${ink}><rect x="59" y="33" width="26" height="22" rx="5"/><rect x="115" y="33" width="26" height="22" rx="5"/></g><path d="M85 40H115M59 40L46 38M141 40L154 38" fill="none" ${ink} stroke-linecap="round"/>`;
+  if (o.hat === "grad") s += `<path d="M56 16L100 2L144 16L100 30Z" fill="#2E2A22"/><path d="M78 24V34Q100 40 122 34V24" fill="#2E2A22"/><path d="M144 16V36" stroke="#D9A441" stroke-width="2"/><circle cx="144" cy="38" r="3" fill="#D9A441"/>`;
+  if (o.hat === "crown") s += `<path d="M64 24L70 4L84 18L100 2L116 18L130 4L136 24Z" fill="#D9A441" stroke="#8A6A00" stroke-width="2" stroke-linejoin="round"/>`;
+  if (o.hat === "beanie") s += `<path d="M50 30Q54 8 100 6Q146 8 150 30Q100 22 50 30Z" fill="${ac}"/><circle cx="100" cy="5" r="6" fill="${ac}"/>`;
+  if (o.hat === "flower") s += `<g fill="${ac}">${[0, 1, 2, 3, 4].map(i => `<circle cx="${124 + 6 * Math.cos(i * 1.2566)}" cy="${18 + 6 * Math.sin(i * 1.2566)}" r="4.5"/>`).join("")}</g><circle cx="124" cy="18" r="3.5" fill="#D9A441"/>`;
+  if (o.aid === "gold") s += `<path d="M${ex} 48Q${ex} 28 ${ex + 18} 22" fill="none" stroke="#D9A441" stroke-width="4" stroke-linecap="round"/><circle cx="${ex}" cy="54" r="5.5" fill="#D9A441" stroke="#3F5A2E" stroke-width="1.5"/>`;
+  s += `</g>`;
+  if (o.neck === "bow") s += `<path d="M100 104L84 96V112ZM100 104L116 96V112Z" fill="${ac}"/><circle cx="100" cy="104" r="5" fill="${ac}" stroke="#fff" stroke-width="1.5"/>`;
+  if (o.neck === "medal") s += `<path d="M90 98L100 124L110 98" fill="none" stroke="${ac}" stroke-width="4"/><circle cx="100" cy="128" r="9" fill="#D9A441" stroke="#8A6A00" stroke-width="2"/>`;
+  s += `</g>`;
+  if (ground) s += `<path d="M0 170V146Q30 136 66 142Q100 138 134 142Q170 136 200 146V170Z" fill="#6b4a2f"/><path d="M0 170V158Q50 150 100 156Q150 150 200 158V170Z" fill="#523823"/><circle cx="28" cy="150" r="3" fill="#523823"/><circle cx="172" cy="148" r="3.5" fill="#523823"/>`;
+  return s + `</svg>`;
 }
-function showXP() { $("xpn").textContent = xp + " XP"; $("miniplant").innerHTML = plantSVG(stageOf()); }
-function addXP(n) { const before = lvl(); xp += n; store.set("hmo-xp", xp); showXP(); return lvl() > before; }
+function showXP() {
+  $("xpn").textContent = xp + " XP"; $("chipname").textContent = mine.name;
+  $("xpchip").setAttribute("aria-label", `Open ${mine.name}, your mole rat`);
+  $("minimole").innerHTML = moleSVG(mine, girth(), false); $("qremi").innerHTML = moleSVG(mine, girth(), true);
+}
+async function addXP(n) {
+  const before = lvl();
+  if (guestMode) {
+    xp += n;
+    store.set("hmo-xp", xp);
+  } else {
+    const response = await fetch("/auth/me/xp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ xp_delta: n })
+    });
+    const data = await readApiJson(response);
+    if (!response.ok) throw new Error(data.detail || "Could not save XP");
+    xp = data.xp;
+  }
+  showXP();
+  return lvl() > before;
+}
 $("xpchip").onclick = () => {
-  const into = xp % LEVEL;
-  $("gplant").innerHTML = plantSVG(stageOf()); $("glevel").textContent = "Level " + lvl();
-  $("gbar").style.width = (stageOf() >= MAXSTAGE ? 100 : into / LEVEL * 100) + "%";
-  $("gtext").textContent = stageOf() >= MAXSTAGE ? `${xp} XP · fully bloomed` : `${xp} XP · ${LEVEL - into} XP to the next level`;
-  $("garden").showModal();
+  const into = xp % LEVEL, top = stageOf() >= MAXSTAGE;
+  $("gname").value = mine.name; $("gplant").innerHTML = moleSVG(mine, girth(), true);
+  $("glevel").textContent = `${mine.name} · Level ${lvl()}`;
+  $("gbar").style.width = (top ? 100 : into / LEVEL * 100) + "%";
+  $("gtext").textContent = top ? `${xp} XP · as round as it gets` : `${xp} XP · ${LEVEL - into} XP until ${mine.name} gets rounder`;
+  $("gnext").textContent = nextUnlock(); drawCust(); drawBadges(); $("garden").showModal();
 };
+$("gname").oninput = e => {
+  mine.name = e.target.value.slice(0, 16).trim() || "Moley";
+  saveMine(); showXP(); $("glevel").textContent = `${mine.name} · Level ${lvl()}`;
+};
+function drawCust() {
+  const box = $("gcust"); box.textContent = "";
+  const row = (title, items, key) => {
+    const r = el("div", "", "crow"), w = el("div", "", "copts"); r.append(el("b", title), w);
+    items.forEach(([id, label, lv, color]) => {
+      const ok = lvl() >= lv, b = el("button", "", "opt"), t = (mine[key] === id ? "✓ " : "") + label + (ok ? "" : " · Level " + lv);
+      if (color) { const sw = el("i"); sw.style.background = color; b.append(sw, el("span", t)); } else b.textContent = t;
+      b.disabled = !ok; b.setAttribute("aria-pressed", mine[key] === id);
+      b.onclick = () => { mine[key] = id; saveMine(); showXP(); $("gplant").innerHTML = moleSVG(mine, girth(), true); drawCust(); };
+      w.append(b);
+    });
+    box.append(r);
+  };
+  row("Skin", SKINS.map(x => [x.id, cap(x.id), x.lv, x.m]), "skin");
+  row("Glasses", CHOICES.glasses, "glasses"); row("Hearing aid", CHOICES.aid, "aid");
+  row("Hat", CHOICES.hat, "hat"); row("Neck", CHOICES.neck, "neck");
+  row("Accent color (hat and neck)", ACCENTS.map(x => [x.id, cap(x.id), x.lv, x.c]), "accent");
+}
 $("gclose").onclick = () => $("garden").close();
 showXP();
+
+const BADGES = {
+  sprout: ["First sprout", "Answered your first question"], think: ["Deep thinker", "Wrote a reflection"],
+  roll: ["On a roll", "3 correct in a row"], poly: ["Bilingual", "Read captions in another language"],
+  back: ["Back-reader", "Looked back at the transcript"], bloom: ["Plump and proud", "Reached the roundest size"],
+};
+let got = new Set();
+function toast(t) { const e = $("toast"); e.textContent = t; e.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => { e.hidden = true; }, 3500); }
+function award(id) {
+  if (got.has(id) || !BADGES[id]) return;
+  got.add(id); store.set(badgeKey, [...got].join(",")); toast("Badge earned: " + BADGES[id][0]);
+}
+function drawBadges() {
+  const ul = $("gbadges"); ul.textContent = "";
+  Object.entries(BADGES).forEach(([id, [name, how]]) => {
+    const li = el("li", "", got.has(id) ? "on" : "");
+    li.append(el("b", name + (got.has(id) ? " ✓" : "")), el("span", got.has(id) ? "Earned" : how)); ul.append(li);
+  });
+}
+function loadMoleProfile(user, guest) {
+  profileKey = guest ? "hmo-mole" : "hmo-mole:" + String(user.username || "user").toLowerCase();
+  badgeKey = guest ? "hmo-badges" : profileKey + ":badges";
+  let saved = store.get(profileKey);
+  if (!saved && !guest) {
+    saved = store.get("hmo-mole");
+    if (saved) store.set(profileKey, saved);
+  }
+  mine = { ...DEFAULT_MOLE };
+  if (saved) { try { Object.assign(mine, JSON.parse(saved)); } catch (_) {} }
+  mine.name = String(mine.name || "Moley").slice(0, 16);
+  let savedBadges = store.get(badgeKey);
+  if (savedBadges === null && !guest) {
+    savedBadges = store.get("hmo-badges");
+    if (savedBadges) store.set(badgeKey, savedBadges);
+  }
+  got = new Set((savedBadges || "").split(",").filter(id => BADGES[id]));
+  if (guest) store.set("hmo-xp", xp);
+  showXP();
+}
 
 /* ===== Quiz me: only on request, only from the last 30 seconds of captions =====
    makeQuestion() runs here in the page so the demo works alone. A server/LLM can replace it later:
@@ -635,10 +880,22 @@ function renderQ() {
     b.append(box);
   }
 }
-function reward(base, ok, msg) {
+async function reward(base, ok, msg) {
   streak = ok ? streak + 1 : 0;
-  const bonus = ok ? Math.min(10, (streak - 1) * 2) : 0, gain = base + bonus, grew = addXP(gain);
-  $("qfb").textContent = `${msg} +${gain} XP` + (bonus ? ` (streak bonus +${bonus})` : "") + (grew ? " · Your plant grew!" : "");
+  const bonus = ok ? Math.min(10, (streak - 1) * 2) : 0, gain = base + bonus;
+  award("sprout");
+  if (q && q.ask) award("think");
+  if (streak >= 3) award("roll");
+  const react = $("qremi"); react.classList.remove("hop", "wob"); void react.offsetWidth; react.classList.add(ok ? "hop" : "wob");
+  try {
+    const grew = await addXP(gain);
+    const unlocked = grew ? unlocksAt(lvl()) : [];
+    if (stageOf() >= MAXSTAGE) award("bloom");
+    if (grew) toast(unlocked.length ? `${mine.name} grew: ${unlocked.join(", ")}` : `${mine.name} grew rounder!`);
+    $("qfb").textContent = `${msg} +${gain} XP` + (bonus ? ` (streak bonus +${bonus})` : "") + (grew ? ` · ${mine.name} grew rounder!` : "");
+  } catch (error) {
+    $("qfb").textContent = "Could not save XP: " + (error.message || "please try again");
+  }
   $("qnext").hidden = false;
 }
 function setQuiz(on) {
@@ -680,7 +937,7 @@ const PEEK = `<svg viewBox="0 0 200 170" role="img" aria-label="Remi the naked m
   <path d="M0 170V158Q50 150 100 156Q150 150 200 158V170Z" fill="#523823"/>
   <circle cx="28" cy="150" r="3" fill="#523823"/><circle cx="172" cy="148" r="3.5" fill="#523823"/><circle cx="118" cy="146" r="2.5" fill="#6b4a2f"/>
 </svg>`;
-document.querySelectorAll(".peekslot").forEach(n => { n.innerHTML = PEEK; });
+document.querySelectorAll(".peekslot:not(#qremi)").forEach(n => { n.innerHTML = PEEK; });
 
 /* Your own art: images/remi.(svg|png) replaces the small header mole; images/remi-peek.(svg|png) replaces the peeking one */
 function useMascotFile(sel, files, inSlot) {
@@ -694,12 +951,45 @@ function useMascotFile(sel, files, inSlot) {
   im.src = files[0];
 }
 useMascotFile("svg.logo", ["images/remi.svg", "images/remi.png"], false);
-useMascotFile(".peekslot", ["images/remi-peek.svg", "images/remi-peek.png"], true);
+useMascotFile(".peekslot:not(#qremi)", ["images/remi-peek.svg", "images/remi-peek.png"], true);
+
+async function launchApp(user, guest = false) {
+  guestMode = guest;
+  xp = guest ? (+store.get("hmo-xp") || 0) : user.xp;
+  $("account-name").textContent = guest ? "Demo" : user.username;
+  $("logout").hidden = guest;
+  document.body.classList.remove("auth-pending", "auth-required");
+  document.body.classList.add("authenticated");
+  loadMoleProfile(user, guest);
+  redrawAll();
+  if (guest) setDemo(true);
+  else connect();
+}
+
+async function restoreAccount() {
+  try {
+    const response = await fetch("/auth/me");
+    const data = await readApiJson(response);
+    if (response.ok) {
+      await launchApp(data);
+      return;
+    }
+    if (response.status !== 401) throw new Error(data.detail || "Could not check your account");
+  } catch (error) {
+    $("auth-error").textContent = error.message || "Could not reach the server";
+  }
+  document.body.classList.remove("auth-pending");
+  document.body.classList.add("auth-required");
+  hideLoader();
+}
 
 addEventListener("resize", () => { sizeSlide(); fillStage(); });
 if (document.fonts) document.fonts.ready.then(fillStage);
-redrawAll();
-if (location.protocol === "file:" || location.hostname.endsWith(".github.io") || params.get("demo") === "1") setDemo(true); else connect();
+if (location.protocol === "file:" || location.hostname.endsWith(".github.io") || params.get("demo") === "1") {
+  launchApp({ username: "Demo", xp: 0 }, true);
+} else {
+  restoreAccount();
+}
 </script>
 </body>
 </html>
