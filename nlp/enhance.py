@@ -33,7 +33,8 @@ _ready = False
 
 
 def setup(mode: str = "pause") -> None:
-    """mode="pause": new speaker after a long pause. mode="embed": by voice (needs enroll/)."""
+    """mode="pause": new speaker after a long pause. mode="embed": by voice (needs enroll/).
+    mode="single": everything is "Professor" (a lecture with one speaker)."""
     global _ready
     label.setup(mode=mode)
     _ready = True

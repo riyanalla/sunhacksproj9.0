@@ -11,6 +11,8 @@
 `start`/`end` (seconds) are only needed for the pause fallback.
 
 Set NLP_SPEAKER_MODE=pause (or setup(mode="pause")) to switch to the fallback.
+setup(mode="single") labels everything SINGLE_SPEAKER ("Professor"): for a lecture, where
+the pause fallback would flip speakers every time the professor pauses.
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ from .speakers import UNKNOWN, PauseSpeakerLabeler, SpeakerIdentifier
 from .vocab import fix_terms
 
 ENROLL_DIR = Path(__file__).with_name("enroll")
+SINGLE_SPEAKER = "Professor"
 
 _mode = os.environ.get("NLP_SPEAKER_MODE", "embed")
 _identifier: SpeakerIdentifier | None = None
@@ -36,7 +39,7 @@ def setup(mode: str | None = None, enroll_dir: str | Path = ENROLL_DIR) -> None:
     global _mode, _identifier
     if mode:
         _mode = mode
-    if _mode != "embed":
+    if _mode != "embed":  # "pause" and "single" need no model
         return
     try:
         _identifier = SpeakerIdentifier()
@@ -60,6 +63,8 @@ def reset() -> None:
 def current_speaker(start: float | None = None) -> str:
     """Best guess for an in-progress (partial) segment, without changing any state."""
     try:
+        if _mode == "single":
+            return SINGLE_SPEAKER
         if _mode == "pause" and start is not None:
             return _pause.peek(start)
     except Exception:
@@ -81,7 +86,9 @@ def label_segment(audio, text: str, start: float | None = None,
         fixed = text
 
     try:
-        if _mode == "pause":
+        if _mode == "single":
+            _last_speaker = SINGLE_SPEAKER
+        elif _mode == "pause":
             if start is None or end is None:
                 return _last_speaker, fixed
             _last_speaker = _pause.label(start, end)

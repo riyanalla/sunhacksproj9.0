@@ -85,3 +85,14 @@ def test_never_raises_on_bad_input():
     assert enh.enhance({"type": "caption", "text": None})["text"] == ""
     assert enh.enhance({"type": "session_end", "session_id": "x"})["type"] == "session_end"
     assert enh.enhance({})["text"] == ""
+
+
+def test_single_speaker_mode_labels_everything_professor():
+    enh.setup("single")
+    try:
+        assert enh.enhance(cap("first", 0.0, 2.0, seg=1))["speaker"] == "Professor"
+        # a long pause no longer flips to "Speaker 2"
+        assert enh.enhance(cap("after a pause", 9.0, 10.0, seg=2))["speaker"] == "Professor"
+        assert enh.enhance(cap("draft", 12.0, 13.0, final=False, seg=3))["speaker"] == "Professor"
+    finally:
+        enh.setup("pause")

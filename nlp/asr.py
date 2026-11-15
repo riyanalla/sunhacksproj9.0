@@ -79,11 +79,13 @@ class Transcriber:
     sent to Whisper too, and picked up as soon as they're uploaded.
     """
 
-    def __init__(self, model_size: str = "base", beam_size: int = 1, session_id=None):
+    def __init__(self, model_size: str = "base", beam_size: int = 1, session_id=None,
+                 model=None):
+        """`model`: an already loaded WhisperModel to share (loading one takes seconds)."""
         from faster_whisper import WhisperModel
         self.model_size = model_size
         self.beam_size = beam_size
-        self.model = WhisperModel(model_size, device="cpu", compute_type="int8")
+        self.model = model or WhisperModel(model_size, device="cpu", compute_type="int8")
         self.session_id = session_id
         self._hotwords_for = None  # (session_id, context version) the cache was built for
         self._hotwords = ""

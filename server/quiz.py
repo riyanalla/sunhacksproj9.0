@@ -88,8 +88,11 @@ def _parse_quiz(response_text: str) -> dict:
     }
 
 
-def make_quiz(transcript: str, slides: str = "") -> dict:
-    """Create one plain-language multiple-choice question from lecture text."""
+def make_quiz(transcript: str, slides: str = "", avoid: list[str] | tuple = ()) -> dict:
+    """Create one plain-language multiple-choice question from lecture text.
+
+    avoid: questions already asked, so "Another question" asks about something new.
+    """
     if not isinstance(transcript, str) or not transcript.strip():
         raise ValueError("A non-empty lecture transcript is required to make a quiz.")
 
@@ -106,14 +109,56 @@ def make_quiz(transcript: str, slides: str = "") -> dict:
         "in the lecture transcript. The transcript is the primary source; use "
         "slides only to interpret terms and provide context. Do not ask about "
         "slide-only facts. Use plain, clear English and one idea per sentence. "
-        "Avoid idioms and trick wording. Keep each answer option under 12 words. "
-        "Include exactly four plausible options with exactly one correct answer. "
+        "Avoid idioms and trick wording. Keep each answer option under 12 words.\n"
+        "Write the question and explanation as direct statements about the subject. "
+        "Never mention the source: do not write phrases like 'according to the "
+        "transcript', 'according to the lecture', 'the professor said', or 'in the "
+        "text'.\n"
+        "Include exactly four options with exactly one correct answer. The three "
+        "wrong options must be close calls a student could believe: about the same "
+        "topic, using terms from this lecture, matching the correct answer's length, "
+        "grammar and style, and based on common misconceptions or easily confused "
+        "ideas (for example swapping two related concepts). No joke options, no "
+        "options that are obviously off-topic, no 'all of the above' or 'none of "
+        "the above'.\n"
         "Return only a JSON object with this shape: "
         '{"question": string, "options": [four strings], '
         '"answer": integer index from 0 to 3, "explanation": string}.\n\n'
-        f"{slide_context}Lecture transcript:\n{transcript}"
+        + (
+            "These questions were already asked. Ask about a different idea, or the "
+            "same idea from a clearly different angle:\n- " + "\n- ".join(avoid) + "\n\n"
+            if avoid else ""
+        )
+        + f"{slide_context}Lecture transcript:\n{transcript}"
     )
-    return _parse_quiz(_generate_text(prompt, max_output_tokens=400, json_response=True))
+    quiz = _parse_quiz(_generate_text(prompt, max_output_tokens=400, json_response=True))
+    return _shuffle_options(_drop_source_mentions(quiz))
+
+
+# Safety net for the prompt rule above: "According to the transcript, X" -> "X".
+_SOURCE_PREFIX = re.compile(
+    r"^\s*(?:according to|based on|as (?:stated|mentioned|described|explained) in|in)\s+"
+    r"(?:the\s+)?(?:lecture\s+)?(?:transcript|lecture|text|professor|slides?|passage)"
+    r"(?:'s\s+\w+)?\s*,\s*",
+    re.IGNORECASE,
+)
+
+
+def _drop_source_mentions(quiz: dict) -> dict:
+    out = dict(quiz)
+    for key in ("question", "explanation"):
+        text = _SOURCE_PREFIX.sub("", out[key])
+        out[key] = text[:1].upper() + text[1:]
+    return out
+
+
+def _shuffle_options(quiz: dict) -> dict:
+    """Language models tend to put the right answer first; shuffle so it can be anywhere."""
+    import random
+    order = list(range(4))
+    random.shuffle(order)
+    return {**quiz, "options": [quiz["options"][i] for i in order],
+            "answer": order.index(quiz["answer"])}
 
 
 def translate(text: str, lang: str) -> str:

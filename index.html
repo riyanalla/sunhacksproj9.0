@@ -119,6 +119,7 @@
   dialog button.right, #quiz button.right { border-color: #3F7A2E; background: rgba(63,122,46,.2); }
   dialog button.wrong, #quiz button.wrong { border-color: #A8482C; background: rgba(168,72,44,.15); }
   dialog textarea, #quiz textarea { width: 100%; font: inherit; font-size: 17px; padding: 10px; border: 2px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--text); margin-bottom: 10px; }
+  #quiz button:disabled:not(.right):not(.wrong), dialog button:disabled:not(.right):not(.wrong) { opacity: .45; cursor: not-allowed; }   /* e.g. Submit before typing an answer */
   #qfb { margin: 12px 0 0; font-weight: 700; min-height: 1.4em; }
   .gnote { color: var(--muted); font-size: 14px; margin: 10px 0 0; } .gcenter { text-align: center; margin: 8px 0; font-weight: 700; }
   .qrow { display: flex; gap: 10px; justify-content: flex-end; margin-top: 14px; }
@@ -207,6 +208,7 @@
 </div>
 
 <footer>
+  <button id="listenbtn" aria-pressed="false">Start listening</button>
   <button id="quizbtn" class="primary">Quiz me</button>
   <button id="smaller" aria-label="Smaller text">A−</button>
   <button id="bigger" aria-label="Larger text">A+</button>
@@ -227,7 +229,7 @@
 
 <script>
 const params = new URLSearchParams(location.search);
-const SESSION = params.get("s") || "lecture-1";
+let SESSION = params.get("s");   // MongoDB id from POST /sessions; null = join the newest lecture
 const root = document.documentElement, $ = id => document.getElementById(id);
 const store = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } },
                 set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
@@ -348,8 +350,19 @@ function onMsg(m) {
 
 /* ===== Live connection ===== */
 let ws, retry = 0, demoOn = false, reconnectTimer;
+async function findSession() {   // no ?s= in the link: follow the newest lecture
+  try { SESSION = (await (await fetch("/sessions/latest")).json()).session_id; } catch (_) {}
+  if (SESSION) { history.replaceState(null, "", "?s=" + SESSION); connect(); }
+  else { setStatus("wait", "No lecture yet"); hideLoader(); setTimeout(() => { if (!SESSION && !demoOn) findSession(); }, 5000); }
+}
+function setSession(id) {        // switch to another lecture (e.g. a new one from Start listening)
+  SESSION = id; history.replaceState(null, "", "?s=" + id);
+  segs.clear(); rows.clear(); finals.clear(); list.textContent = ""; hist = []; curId = null; fillStage();
+  clearTimeout(reconnectTimer); if (ws) { ws.onclose = null; ws.close(); } connect();
+}
 function connect() {
   if (demoOn) return;
+  if (!SESSION) return findSession();
   ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/captions/${SESSION}`);
   ws.onopen = () => { retry = 0; setStatus("live", "Live"); hideLoader(); backfill(); };
   ws.onmessage = e => { try { onMsg(JSON.parse(e.data)); } catch (_) {} };
@@ -394,6 +407,72 @@ function setDemo(on) {
 }
 $("demo").onclick = () => setDemo(!demoOn);
 
+/* ===== Start listening: this laptop's mic -> server -> Whisper -> captions for everyone =====
+   PROTOCOL.md audio format: 16 kHz mono 16-bit PCM, 100 ms (1600 samples) per message. */
+let mic = null;
+function setListen(text, on) { $("listenbtn").textContent = text; $("listenbtn").setAttribute("aria-pressed", on); }
+async function startListening() {
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    alert("The microphone only works over https or on http://localhost. Open this page on the laptop running the server (http://localhost:8000).");
+    return;
+  }
+  setListen("Starting…", true);
+  try {
+    // Continue the lecture in the link, or start a new one.
+    if (!SESSION || !confirm("Continue this lecture? (Cancel starts a new one.)")) {
+      const d = await (await fetch("/sessions", { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}" })).json();
+      setSession(d.session_id);
+    }
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: false, noiseSuppression: true, autoGainControl: true } });
+    const ctx = new AudioContext();
+    const tap = "class Tap extends AudioWorkletProcessor { process(i) { if (i[0][0]) this.port.postMessage(i[0][0].slice(0)); return true; } } registerProcessor('tap', Tap);";
+    await ctx.audioWorklet.addModule(URL.createObjectURL(new Blob([tap], { type: "text/javascript" })));
+    const node = new AudioWorkletNode(ctx, "tap", { numberOfOutputs: 0 });
+    mic = { stream, ctx, node, on: true, buf: new Float32Array(0), pos: 0, out: [], pending: [] };
+    const ratio = ctx.sampleRate / 16000;
+    node.port.onmessage = e => {               // average down to 16 kHz, send every 100 ms
+      const m = mic; if (!m || !m.on) return;
+      const b = new Float32Array(m.buf.length + e.data.length); b.set(m.buf); b.set(e.data, m.buf.length);
+      let p = m.pos;
+      while (p + ratio <= b.length) {
+        let sum = 0, n = 0;
+        for (let k = Math.floor(p); k < Math.floor(p + ratio); k++) { sum += b[k]; n++; }
+        m.out.push(n ? sum / n : 0); p += ratio;
+      }
+      const used = Math.floor(p); m.buf = b.slice(used); m.pos = p - used;
+      while (m.out.length >= 1600) {
+        const pcm = Int16Array.from(m.out.splice(0, 1600), v => Math.max(-1, Math.min(1, v)) * 32767);
+        m.pending.push(pcm.buffer);                    // held while (re)connecting, up to 60 s
+        if (m.pending.length > 600) m.pending.shift();
+        if (m.ws && m.ws.readyState === 1) m.pending.splice(0).forEach(f => m.ws.send(f));
+      }
+    };
+    ctx.createMediaStreamSource(stream).connect(node);
+    openMicSocket();
+  } catch (err) { stopListening(false); alert("Could not start listening: " + (err.message || err)); }
+}
+function openMicSocket() {
+  if (!mic || !mic.on) return;
+  const w = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws/audio/${SESSION}`);
+  w.binaryType = "arraybuffer"; mic.ws = w;
+  w.onmessage = e => {
+    let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+    if (m.type === "ready") setListen("Stop listening", true);
+    else if (m.type === "error") { alert(m.detail); stopListening(false); }
+  };
+  w.onclose = () => { if (mic && mic.on && mic.ws === w) { setListen("Reconnecting…", true); setTimeout(openMicSocket, 2000); } };
+}
+function stopListening(endLecture = true) {
+  const m = mic; mic = null;
+  if (m) {
+    m.on = false;
+    if (m.ws) { if (endLecture && m.ws.readyState === 1) m.ws.send("stop"); setTimeout(() => m.ws.close(), 1000); }
+    m.stream.getTracks().forEach(t => t.stop()); m.ctx.close();
+  }
+  setListen("Start listening", false);
+}
+$("listenbtn").onclick = () => mic ? stopListening() : startListening();
+
 /* ===== Reading controls ===== */
 let size = +store.get("hmo-size") || 28;
 const applySize = () => { root.style.setProperty("--size", size + "px"); store.set("hmo-size", size); fillStage(); };
@@ -426,12 +505,26 @@ keepAwake();
 
 /* ===== Student's own slides (the professor does not upload any) ===== */
 const mySlides = []; let si = 0;
-const picker = Object.assign(document.createElement("input"), { type: "file", accept: "image/*", multiple: true });
+const picker = Object.assign(document.createElement("input"), { type: "file", accept: "image/*,application/pdf", multiple: true });
 picker.onchange = () => {
-  mySlides.length = 0;
-  [...picker.files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).forEach(f => mySlides.push(URL.createObjectURL(f)));
+  const files = [...picker.files];
+  const pdfs = files.filter(f => f.type === "application/pdf"), imgs = files.filter(f => f.type.startsWith("image/"));
+  pdfs.forEach(uploadPdf);
+  if (imgs.length) mySlides.length = 0;
+  imgs.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).forEach(f => mySlides.push(URL.createObjectURL(f)));
   if (mySlides.length) { si = 0; hasSlide = true; slidesOn = true; drawMySlide(); }
+  picker.value = "";
 };
+async function uploadPdf(f) {   // the server keeps the text for quizzes and better captions
+  const was = $("stext").textContent, back = () => setTimeout(() => { $("stext").textContent = was; }, 5000);
+  if (demoOn || !SESSION) { $("stext").textContent = "Join a lecture to upload slides"; return back(); }
+  const fd = new FormData(); fd.append("file", f);
+  try {
+    const r = await fetch(`/sessions/${SESSION}/slides`, { method: "POST", body: fd });
+    $("stext").textContent = r.ok ? "Slides added for quizzes and captions" : "Couldn't read that PDF";
+  } catch (_) { $("stext").textContent = "Slides upload failed"; }
+  back();
+}
 function drawMySlide() { $("slide").src = mySlides[si]; $("slabel").textContent = `Slide ${si + 1} of ${mySlides.length}`; showSlides(); }
 $("sprev").onclick = () => { if (si > 0) { si--; drawMySlide(); } };
 $("snext").onclick = () => { if (si < mySlides.length - 1) { si++; drawMySlide(); } };
@@ -495,7 +588,25 @@ function makeQuestion() {
   return { kind: "blank", xp: 10, prompt: "What did the professor just say? Fill in the blank.", context: text.replace(answer, "_____"), answer, others, options: shuffle([answer, ...others]) };
 }
 
-let q = null;
+let q = null, qAsk = 0;
+async function newQuestion() {
+  const ask = ++qAsk;
+  if (!demoOn && SESSION) {
+    $("qbody").textContent = "Remi is writing a question…"; $("qfb").textContent = ""; $("qnext").hidden = true;
+    try {
+      const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 20000);
+      const r = await fetch(`/sessions/${SESSION}/quiz`, { method: "POST", signal: ctl.signal });
+      clearTimeout(timer);
+      if (ask !== qAsk) return;
+      if (r.ok) {
+        const d = await r.json();
+        q = { kind: "mcq", xp: 15, prompt: d.question, options: d.options, answer: d.options[d.answer], explanation: d.explanation };
+        return renderQ();
+      }
+    } catch (_) { if (ask !== qAsk) return; }
+  }
+  q = makeQuestion(); renderQ();     // offline / no API key / not enough transcript yet
+}
 function renderQ() {
   const b = $("qbody"); b.textContent = ""; $("qfb").textContent = ""; $("qnext").hidden = true;
   if (!q) { b.append(el("p", "Not enough captions in the last 30 seconds yet. Listen a little longer, then tap Quiz me again.")); return; }
@@ -503,7 +614,7 @@ function renderQ() {
   if (q.ask) {
     const t = document.createElement("textarea"); t.rows = 3; t.setAttribute("aria-label", "Your answer"); t.placeholder = "Why might this matter? Say it in your own words.";
     const go = el("button", "Submit", "primary"); go.disabled = true;
-    t.oninput = () => { go.disabled = t.value.trim().length < 12; };
+    t.oninput = () => { go.disabled = !t.value.trim(); };   // any answer counts, just not an empty one
     go.onclick = () => { t.disabled = go.disabled = true; reward(q.xp, true, "Thanks for thinking it through. There's no wrong answer here."); };
     b.append(t, go);
   } else {
@@ -514,7 +625,8 @@ function renderQ() {
         box.querySelectorAll("button").forEach(x => x.disabled = true);
         const ok = o === q.answer; bt.classList.add(ok ? "right" : "wrong");
         if (q.kind === "blank") lastQ = { shown: q.context, answer: q.answer, others: q.others };
-        reward(ok ? q.xp : 2, ok, ok ? "Correct!" : `Not quite. It was “${q.answer}”.`);
+        const why = q.explanation ? " " + q.explanation : "";
+        reward(ok ? q.xp : 2, ok, (ok ? "Correct!" : `Not quite. It was “${q.answer}”.`) + why);
       };
       box.append(bt);
     });
@@ -530,11 +642,11 @@ function reward(base, ok, msg) {
 function setQuiz(on) {
   if (on) { document.body.classList.remove("tr-open"); $("trbtn").setAttribute("aria-pressed", false); }
   document.body.classList.toggle("quiz-open", on); $("quizbtn").setAttribute("aria-pressed", on);
-  if (on) { q = makeQuestion(); renderQ(); }
+  if (on) newQuestion();
   syncSide();
 }
 $("quizbtn").onclick = () => setQuiz(!document.body.classList.contains("quiz-open"));
-$("qnext").onclick = () => { q = makeQuestion(); renderQ(); };
+$("qnext").onclick = () => newQuestion();
 $("qclose").onclick = $("qx").onclick = () => setQuiz(false);
 $("trclose").onclick = () => setTr(false);
 

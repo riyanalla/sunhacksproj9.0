@@ -66,6 +66,12 @@ def save_segment(message: dict) -> None:
     )
 
 
+def create_session(title: str | None = None) -> str:
+    """Create a lecture session and return its ID (used in URLs as ?s=<id>)."""
+    result = _sessions.insert_one({"title": title, "created_at": datetime.now(timezone.utc)})
+    return str(result.inserted_id)
+
+
 def list_sessions() -> list[str]:
     # Return IDs as strings because they are sent through JSON and URL paths.
     return [str(session["_id"]) for session in _sessions.find({}, {"_id": 1})]
