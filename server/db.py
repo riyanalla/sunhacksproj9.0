@@ -18,12 +18,20 @@ _mongo_uri = os.getenv("MONGODB_URI", MONGODB_URI)
 if not _mongo_uri:
     raise RuntimeError("MONGODB_URI must be set before starting the server")
 
-# Connect to the lecture database and select the collections used by this module.
+# Connect to the database and select the collections used by this module.
 _client = MongoClient(_mongo_uri)
 _database = _client[os.getenv("MONGODB_DATABASE", MONGODB_DATABASE)]
+_users = _database["users"]
 _sessions = _database["sessions"]
 _segments = _database["transcript_segments"]
 _slides = _database["slides"]
+
+# Give existing users the starting progression level without overwriting
+# levels that have already been assigned.
+_users.update_many(
+    {"level": {"$exists": False}},
+    {"$set": {"level": 1}},
+)
 
 # Prevent duplicate segment numbers within a session
 _segments.create_index(
