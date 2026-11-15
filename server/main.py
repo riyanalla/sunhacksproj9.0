@@ -2,6 +2,7 @@
 from collections import defaultdict
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+import db
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -28,5 +29,22 @@ async def broadcast(session_id: str, msg: dict):
 # Internal: fake emitter and the ASR pipeline push captions through here
 @app.post("/sessions/{session_id}/caption")
 async def post_caption(session_id: str, msg: dict):
+    if msg.get("type") == "caption" and msg.get("is_final"):
+        try:
+            db.save_segment(msg)
+        except Exception as e:
+            print("DB save failed:", e)
     await broadcast(session_id, msg)
     return {"ok": True}
+    
+@app.get("/sessions")
+def sessions():
+    return db.list_sessions()
+
+@app.get("/sessions/{session_id}/transcript")
+def transcript(session_id: str):
+    return db.get_transcript(session_id)
+
+@app.get("/search")
+def search_route(q: str, session_id: str | None = None):
+    return db.search(q, session_id)
