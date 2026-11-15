@@ -16,9 +16,7 @@ MONGODB_URI =  "mongodb+srv://eobane_db_user:bMYuKjr9sP0X1cjP@cluster0.eolnuma.m
 
 # Read connection settings from environment variables so credentials stay out
 # of the source code.
-_mongo_uri = os.getenv("MONGODB_URI")
-if not _mongo_uri:
-    raise RuntimeError("MONGODB_URI must be set before starting the server")
+_mongo_uri = MONGODB_URI
 
 # Connect to the database and select the collections used by this module.
 _client = MongoClient(_mongo_uri)
