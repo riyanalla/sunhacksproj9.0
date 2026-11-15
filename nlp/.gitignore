@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Teammates' voice recordings and generated outputs stay local
+recordings/
+enroll/
+outputs/
+*.wav
+*.mp3
+*.m4a
+
+# Accuracy-test recordings, scripts and results
+wer_runs/

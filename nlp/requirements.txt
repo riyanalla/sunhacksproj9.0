@@ -1,0 +1,13 @@
+faster-whisper
+rapidfuzz
+numpy
+soundfile
+sounddevice
+pytest
+# resemblyzer's own dependencies, with prebuilt webrtcvad wheels (the original
+# webrtcvad needs C++ build tools on Windows). Install resemblyzer itself with:
+#   pip install resemblyzer --no-deps
+webrtcvad-wheels
+librosa
+scipy
+torch
