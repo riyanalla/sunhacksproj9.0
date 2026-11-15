@@ -73,4 +73,12 @@ cd server && python -m pytest test_main.py   # server, with an in-memory databas
 | `GEMINI_API_KEY` | (none) | Needed for server-made quiz questions |
 | `NLP_MODEL` | `base` | Whisper model: `tiny.en` is faster but less accurate |
 | `NLP_SPEAKER_MODE` | `single` | `single` labels everything "Professor"; `pause` guesses speaker changes from pauses |
-| `MONGODB_URI`, `MONGODB_DATABASE` | see `server/db.py` | Database connection |
+| `MONGODB_URI`, `MONGODB_DATABASE` | `lecture_app` | Database connection; `MONGODB_URI` is required |
+
+### Sign in
+
+Open `http://localhost:8000/signin` to verify a user from the MongoDB `users`
+collection. User documents must include `username` or `email` and a
+`password_hash` created with `server.db.encode_password`; passwords are never
+stored or compared in plain text. Signed-in users have their XP and derived
+level loaded from MongoDB and saved there after quiz rewards.

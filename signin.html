@@ -50,8 +50,17 @@
             password: form.password.value
           })
         });
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.detail || "Sign in failed.");
+        const responseText = await response.text();
+        let result = {};
+        try {
+          result = responseText ? JSON.parse(responseText) : {};
+        } catch (_) {
+          result = {};
+        }
+        if (!response.ok) {
+          throw new Error(result.detail || `Sign in failed (HTTP ${response.status}).`);
+        }
+        if (!result.ok) throw new Error("The server returned an invalid sign-in response.");
         window.location.href = "/";
       } catch (error) {
         message.textContent = error.message;
