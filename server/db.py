@@ -23,6 +23,7 @@ _client = MongoClient(_mongo_uri)
 _database = _client[os.getenv("MONGODB_DATABASE", MONGODB_DATABASE)]
 _sessions = _database["sessions"]
 _segments = _database["transcript_segments"]
+_slides = _database["slides"]
 
 # Prevent duplicate segment numbers within a session
 _segments.create_index(
@@ -31,6 +32,7 @@ _segments.create_index(
 )
 _segments.create_index([("session_id", ASCENDING), ("start_ms", ASCENDING)])
 _segments.create_index([("text", "text")])
+_slides.create_index([("session_id", ASCENDING)])
 
 
 def _session_object_id(session_id: str) -> ObjectId:
@@ -88,6 +90,28 @@ def get_transcript(session_id: str) -> list[dict]:
         }
         for row in rows
     ]
+
+
+def save_slides(session_id: str, filename: str, file_type: str | None, extracted_text: str) -> str:
+    """Save extracted slide text and return the new document ID."""
+    slide = {
+        "session_id": _session_object_id(session_id),
+        "filename": filename,
+        "file_type": file_type,
+        "extracted_text": extracted_text,
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = _slides.insert_one(slide)
+    return str(result.inserted_id)
+
+
+def get_slides(session_id: str) -> str:
+    """Return the newest extracted slide text for a session, or an empty string."""
+    row = _slides.find_one(
+        {"session_id": _session_object_id(session_id)},
+        sort=[("created_at", -1)],
+    )
+    return row["extracted_text"] if row else ""
 
 
 def search(query: str, session_id: str | None = None) -> list[dict]:

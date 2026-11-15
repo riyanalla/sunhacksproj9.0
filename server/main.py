@@ -1,8 +1,9 @@
 # server/main.py
 from collections import defaultdict
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, HTTPException, UploadFile, WebSocket, WebSocketDisconnect
 import db
 from middleware import configure_middleware
+from quiz import extract_slide_text
 
 # Create the FastAPI application and attach shared HTTP middleware.
 app = FastAPI()
@@ -66,6 +67,37 @@ def transcript(session_id: str):
     # Convert invalid MongoDB IDs into a client-facing validation error.
     try:
         return db.get_transcript(session_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+@app.post("/sessions/{session_id}/slides")
+async def upload_slides(session_id: str, file: UploadFile = File(...)):
+    # Extract selectable text before storing the slide metadata and content.
+    if file.content_type not in {"application/pdf", "application/x-pdf"}:
+        raise HTTPException(status_code=415, detail="only PDF slide files are supported")
+
+    try:
+        extracted_text = extract_slide_text(file.file)
+        slide_id = db.save_slides(
+            session_id,
+            file.filename or "slides.pdf",
+            file.content_type,
+            extracted_text,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+    return {
+        "slide_id": slide_id,
+        "session_id": session_id,
+        "filename": file.filename,
+        "extracted_characters": len(extracted_text),
+    }
+
+@app.get("/sessions/{session_id}/slides")
+def slides(session_id: str):
+    try:
+        return {"session_id": session_id, "text": db.get_slides(session_id)}
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
