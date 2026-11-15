@@ -1,6 +1,5 @@
 fastapi
 uvicorn[standard]
 requests
-anthropic
 pypdf
 python-multipart
