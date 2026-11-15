@@ -9,6 +9,8 @@ compared word by word with the text you meant to say.
                                                     # re-score a saved recording with
                                                     # different settings (no re-reading)
     python -m nlp.wer_test --history                # table of every run so far
+    python -m nlp.wer_test --audio nlp/wer_runs/run_0004.wav --slides nlp/scripts/sample_slides.txt
+                                                    # same, with lecture slides as context
 
 Every recording is saved in nlp/wer_runs/ (git-ignored) next to the text you read, so
 you can compare models and settings on exactly the same audio. Transcription uses the
@@ -27,6 +29,7 @@ from pathlib import Path
 RUNS_DIR = Path(__file__).with_name("wer_runs")
 HISTORY = RUNS_DIR / "history.csv"
 SAMPLE_RATE = 16000
+SESSION = "wer-test"  # session id the --slides context is stored under
 
 
 def ask(prompt: str) -> str:
@@ -62,8 +65,11 @@ def record_live(tr, pause: float, max_seconds: float, device=None):
     import numpy as np
     import sounddevice as sd
 
+    from . import context
     from .chunker import PauseChunker
     from .vocab import fix_terms, highlight_terms
+
+    terms = context.fix_terms_for(tr.session_id)
 
     q: queue.Queue = queue.Queue()
     blocks, segments = [], []
@@ -76,7 +82,8 @@ def record_live(tr, pause: float, max_seconds: float, device=None):
         for seg in tr(chunk):
             s, e, text = start / SAMPLE_RATE + seg.start, start / SAMPLE_RATE + seg.end, seg.text.strip()
             segments.append((s, e, text))
-            print(f"  [{s:5.1f}s] {highlight_terms(fix_terms(text))}", flush=True)
+            fixed = fix_terms(text, extra_terms=terms)
+            print(f"  [{s:5.1f}s] {highlight_terms(fixed, extra_terms=terms)}", flush=True)
         busy[0] += time.perf_counter() - t
 
     ask("\nPress Enter, then read the text aloud. Press Enter again when you're done. ")
@@ -136,6 +143,7 @@ def main():
     p.add_argument("--ref", help="text file with what you'll read (default: paste it)")
     p.add_argument("--audio", help="re-score a saved recording instead of recording")
     p.add_argument("--device", type=int, default=None, help="mic index (see live_test --list-devices)")
+    p.add_argument("--slides", help="lecture slides/notes (.txt or .pdf) to use as context")
     p.add_argument("--history", action="store_true", help="show every past run and exit")
     args = p.parse_args()
 
@@ -145,9 +153,16 @@ def main():
     from faster_whisper import decode_audio
     import soundfile as sf
 
+    from . import context
     from .asr import Transcriber, transcribe_audio
     from .vocab import fix_terms
     from .wer import score
+
+    session = None
+    if args.slides:
+        session = SESSION
+        info = context.set_context(session, context.read_slides(args.slides))
+        print(f"Slide terms: {', '.join(info['hints']) or '(none new)'}", file=sys.stderr)
 
     # 1. Reference text + audio
     if args.audio:
@@ -165,7 +180,7 @@ def main():
         if not reference.strip():
             sys.exit("No text given.")
         print("Loading Whisper...", file=sys.stderr)
-        tr = Transcriber(args.model)
+        tr = Transcriber(args.model, session_id=session)
         # 2a. Live captions while you read; the score is for exactly these captions
         audio, segments, elapsed = record_live(tr, args.pause, args.chunk, args.device)
         if len(audio) < SAMPLE_RATE // 2:
@@ -179,19 +194,21 @@ def main():
         if len(audio) < SAMPLE_RATE // 2:
             sys.exit("Recording is empty or too short.")
         print("Loading Whisper...", file=sys.stderr)
-        tr = Transcriber(args.model)
+        tr = Transcriber(args.model, session_id=session)
         print("Transcribing...", file=sys.stderr)
         t = time.perf_counter()
         segments = transcribe_audio(tr, audio, pause=args.pause, max_seconds=args.chunk)
         elapsed = time.perf_counter() - t
     raw = " ".join(text for _, _, text in segments)
-    fixed = " ".join(fix_terms(text) for _, _, text in segments)
+    terms = context.fix_terms_for(session)
+    fixed = " ".join(fix_terms(text, extra_terms=terms) for _, _, text in segments)
 
     # 3. Score
     r_raw, r = score(reference, raw), score(reference, fixed)
     speed = (len(audio) / SAMPLE_RATE) / max(elapsed, 1e-6)
     print(f"\nRecording : {wav}")
-    print(f"Model     : {args.model}   (pause {args.pause}s, chunk {args.chunk}s)")
+    label = args.model + ("+slides" if args.slides else "")
+    print(f"Model     : {label}   (pause {args.pause}s, chunk {args.chunk}s)")
     print(f"\nYou said  : {reference.strip()}")
     print(f"Captions  : {fixed}")
     print(f"\nWord error rate: {r.wer:.1%}  ({r.substitutions} wrong, {r.deletions} missed, "
@@ -216,7 +233,7 @@ def main():
         if new:
             w.writerow(["when", "recording", "model", "pause", "chunk", "words",
                         "wer", "wer_fixed", "speed", "transcript"])
-        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), wav.stem, args.model,
+        w.writerow([datetime.now().strftime("%Y-%m-%d %H:%M"), wav.stem, label,
                     args.pause, args.chunk, r.ref_words, f"{r_raw.wer:.4f}", f"{r.wer:.4f}",
                     f"{speed:.2f}", fixed])
     print(f"\nLogged to {HISTORY}  (see all runs: python -m nlp.wer_test --history)")

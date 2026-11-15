@@ -3,6 +3,7 @@
     python -m nlp.live_test                        # live captions (speaker = pause-based guess)
     python -m nlp.live_test --model tiny.en        # faster, less accurate
     python -m nlp.live_test --list-devices         # find your mic, then add --device N
+    python -m nlp.live_test --slides notes.pdf     # use lecture slides/notes as context
     python -m nlp.live_test enroll alice           # record 10 s of alice talking alone,
     python -m nlp.live_test --mode embed           # then label speakers by voice
 
@@ -15,6 +16,8 @@ Audio is sent to Whisper each time the speaker pauses (--pause, default 0.5 s), 
 after at most --chunk seconds (default 6), cut at a gap between words. Silence is
 never transcribed. See chunker.py.
 """
+
+from __future__ import annotations
 
 import argparse
 import queue
@@ -52,14 +55,21 @@ def record_enrollment(name: str, device=None):
 
 
 def live(mode: str, chunk_seconds: float, model_size: str, device=None,
-         pause_seconds: float = 0.5):
-    from . import label
+         pause_seconds: float = 0.5, slides: str | None = None):
+    from . import context, label
     from .asr import Transcriber
     from .vocab import highlight_terms
 
+    session = None
+    if slides:
+        session = "live-test"
+        info = context.set_context(session, context.read_slides(slides))
+        print(f"Slide terms: {', '.join(info['hints']) or '(none new)'}", file=sys.stderr)
+    terms = context.fix_terms_for(session)
+
     label.setup(mode=mode)
     print("Loading Whisper...", file=sys.stderr)
-    whisper = Transcriber(model_size)  # same settings the accuracy test (wer_test) uses
+    whisper = Transcriber(model_size, session_id=session)  # same settings as wer_test
 
     q: queue.Queue = queue.Queue()
     recording = threading.Event()
@@ -95,9 +105,10 @@ def live(mode: str, chunk_seconds: float, model_size: str, device=None,
         for seg in whisper(chunk):
             a = chunk[int(seg.start * SAMPLE_RATE):int(seg.end * SAMPLE_RATE)]
             speaker, text = label.label_segment(
-                a, seg.text.strip(), offset + seg.start, offset + seg.end)
+                a, seg.text.strip(), offset + seg.start, offset + seg.end, terms)
             if text:
-                print(f"[{offset + seg.start:6.1f}s] {speaker:>10}: {highlight_terms(text)}")
+                print(f"[{offset + seg.start:6.1f}s] {speaker:>10}: "
+                      f"{highlight_terms(text, extra_terms=terms)}")
 
     last_warn = 0.0
 
@@ -150,6 +161,7 @@ def main():
     p.add_argument("--model", default="base")
     p.add_argument("--device", type=int, default=None, help="mic index from --list-devices")
     p.add_argument("--list-devices", action="store_true")
+    p.add_argument("--slides", help="lecture slides/notes (.txt or .pdf) to use as context")
     args = p.parse_args()
 
     if args.list_devices:
@@ -157,7 +169,7 @@ def main():
     elif args.command[:1] == ["enroll"] and len(args.command) == 2:
         record_enrollment(args.command[1], args.device)
     elif not args.command:
-        live(args.mode, args.chunk, args.model, args.device, args.pause)
+        live(args.mode, args.chunk, args.model, args.device, args.pause, args.slides)
     else:
         p.error("usage: live_test [enroll NAME] [--mode embed]")
 

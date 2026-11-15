@@ -1,0 +1,31 @@
+STA 427: Bayesian Statistics
+Lecture 1: What Is Bayesian Statistics?
+
+Two Interpretations of Probability
+• Frequentist interpretation: probability is the limit of the relative frequency of an event over many trials
+• Bayesian interpretation: probability is a degree of belief in an event
+• The degree of belief can change when we observe new data
+
+Prior Knowledge
+• Prior knowledge comes from previous experiments, expert opinion, or personal beliefs
+• We encode prior knowledge as a prior distribution over the unknown parameter
+• Example: a coin with unknown probability of heads, prior distribution Beta(2, 2)
+
+Bayes' Theorem
+• posterior distribution ∝ likelihood × prior distribution
+• The likelihood describes how probable the observed data is for each parameter value
+• The posterior distribution combines prior knowledge with the data
+
+Frequentist vs Bayesian
+• Frequentist methods: parameters are fixed, data are random
+• Bayesian methods: parameters are random, and we update beliefs with data
+• Frequentist confidence interval vs Bayesian credible interval
+
+Updating Beliefs
+• Start with a prior distribution
+• Observe data and compute the likelihood
+• Apply Bayes' theorem to get the posterior distribution
+• Today's posterior becomes tomorrow's prior
+
+Reading: Gelman et al., Bayesian Data Analysis (BDA3), Chapter 1
+Homework 1 due Friday on Canvas

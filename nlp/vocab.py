@@ -57,11 +57,13 @@ def load_vocab(path: str | Path = VOCAB_PATH) -> dict:
     return {k: list(data.get(k, [])) for k in ("professor", "acronyms", "terms", "classroom")}
 
 
-@lru_cache(maxsize=None)
-def _terms_for(path: str) -> tuple[Term, ...]:
+@lru_cache(maxsize=256)
+def _terms_for(path: str, extra: tuple[str, ...] = ()) -> tuple[Term, ...]:
     vocab = load_vocab(path)
     entries: list[tuple[str, bool]] = [(a, True) for a in vocab["acronyms"]]
     entries += [(t, False) for t in vocab["terms"]]
+    # Session terms from slides (context.py): ALL-CAPS ones are acronyms.
+    entries += [(t, t.isupper() and " " not in t) for t in extra]
     for name in vocab["professor"]:
         entries.append((name, False))
         # Also match the surname alone ("Professor Smith" -> "Smith").
@@ -76,8 +78,9 @@ def _terms_for(path: str) -> tuple[Term, ...]:
     return tuple(terms)
 
 
-def get_terms(path: str | Path = VOCAB_PATH) -> tuple[Term, ...]:
-    return _terms_for(str(Path(path).resolve()))
+def get_terms(path: str | Path = VOCAB_PATH, extra: tuple[str, ...] = ()) -> tuple[Term, ...]:
+    """vocab.json terms, plus `extra` terms (e.g. from this lecture's slides)."""
+    return _terms_for(str(Path(path).resolve()), tuple(extra))
 
 
 def build_initial_prompt(path: str | Path = VOCAB_PATH) -> str:
@@ -93,14 +96,18 @@ def build_initial_prompt(path: str | Path = VOCAB_PATH) -> str:
     return " ".join(parts)
 
 
-def build_hotwords(path: str | Path = VOCAB_PATH) -> str:
+def build_hotwords(path: str | Path = VOCAB_PATH, extra: tuple[str, ...] = ()) -> str:
     """Text for faster-whisper's `hotwords`: course terms plus everyday class words.
 
     Unlike `initial_prompt`, this is sent with every chunk, so `initial_prompt` stays
-    free for the previous sentence (see live_test.py).
+    free for the previous sentence (see live_test.py). `extra` (this lecture's slide
+    terms) goes after the course terms and before the everyday classroom words, which
+    matter least: Whisper drops whatever is past its ~220-token limit.
     """
     v = load_vocab(path)
-    words = v["professor"] + v["terms"] + v["acronyms"] + v["classroom"]
+    have = {w.lower() for w in v["professor"] + v["terms"] + v["acronyms"]}
+    extra = [t for t in extra if t.lower() not in have]
+    words = v["professor"] + v["terms"] + v["acronyms"] + extra + v["classroom"]
     return ", ".join(words) + "." if words else ""
 
 
@@ -145,9 +152,11 @@ def _plural_suffix(span: list[str], term: Term) -> str:
     return ""
 
 
-def fix_terms(text: str, path: str | Path = VOCAB_PATH, cutoff: float = SCORE_CUTOFF) -> str:
-    """Replace near-miss spellings of vocab terms with the canonical spelling."""
-    terms = get_terms(path)
+def fix_terms(text: str, path: str | Path = VOCAB_PATH, cutoff: float = SCORE_CUTOFF,
+              extra_terms: tuple[str, ...] = ()) -> str:
+    """Replace near-miss spellings of vocab terms (and `extra_terms`) with the canonical
+    spelling."""
+    terms = get_terms(path, extra_terms)
     if not terms or not text:
         return text
     words = list(_WORD_RE.finditer(text))
@@ -185,10 +194,11 @@ def fix_terms(text: str, path: str | Path = VOCAB_PATH, cutoff: float = SCORE_CU
     return "".join(out)
 
 
-def find_terms(text: str, path: str | Path = VOCAB_PATH) -> list[dict]:
+def find_terms(text: str, path: str | Path = VOCAB_PATH,
+               extra_terms: tuple[str, ...] = ()) -> list[dict]:
     """Character spans of vocab terms in (already fixed) text, for bolding in the UI."""
     spans = []
-    for term in sorted(get_terms(path), key=lambda t: -len(t.canonical)):
+    for term in sorted(get_terms(path, extra_terms), key=lambda t: -len(t.canonical)):
         pattern = r"(?<![A-Za-z0-9])" + re.escape(term.canonical) + r"(?![A-Za-z0-9])"
         for m in re.finditer(pattern, text, flags=re.IGNORECASE):
             if not any(m.start() < s["end"] and s["start"] < m.end() for s in spans):
@@ -197,10 +207,10 @@ def find_terms(text: str, path: str | Path = VOCAB_PATH) -> list[dict]:
 
 
 def highlight_terms(text: str, open_tag: str = "**", close_tag: str = "**",
-                    path: str | Path = VOCAB_PATH) -> str:
+                    path: str | Path = VOCAB_PATH, extra_terms: tuple[str, ...] = ()) -> str:
     """Wrap vocab terms in markers, e.g. '**gradient descent**'."""
     out, cursor = [], 0
-    for s in find_terms(text, path):
+    for s in find_terms(text, path, extra_terms):
         out += [text[cursor:s["start"]], open_tag, text[s["start"]:s["end"]], close_tag]
         cursor = s["end"]
     out.append(text[cursor:])
