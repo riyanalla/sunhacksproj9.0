@@ -75,7 +75,15 @@ class PauseSpeakerLabeler:
         self._last_end: float | None = None
 
     def label(self, start: float, end: float) -> str:
-        if self._last_end is not None and start - self._last_end > self.gap:
-            self._idx = (self._idx + 1) % len(self.names)
+        self._idx = self._next_idx(start)
         self._last_end = end
         return self.names[self._idx]
+
+    def peek(self, start: float) -> str:
+        """The label a segment starting at `start` would get, without changing any state."""
+        return self.names[self._next_idx(start)]
+
+    def _next_idx(self, start: float) -> int:
+        if self._last_end is not None and start - self._last_end > self.gap:
+            return (self._idx + 1) % len(self.names)
+        return self._idx

@@ -50,6 +50,23 @@ def setup(mode: str | None = None, enroll_dir: str | Path = ENROLL_DIR) -> None:
         _mode = "pause"
 
 
+def reset() -> None:
+    """Forget speaker history, e.g. at the start of a new lecture. Keeps enrolled voices."""
+    global _pause, _last_speaker
+    _pause = PauseSpeakerLabeler()
+    _last_speaker = UNKNOWN
+
+
+def current_speaker(start: float | None = None) -> str:
+    """Best guess for an in-progress (partial) segment, without changing any state."""
+    try:
+        if _mode == "pause" and start is not None:
+            return _pause.peek(start)
+    except Exception:
+        traceback.print_exc()
+    return _last_speaker
+
+
 def label_segment(audio, text: str, start: float | None = None,
                   end: float | None = None) -> tuple[str, str]:
     """(speaker, fixed_text) for one Whisper segment. Never raises."""
