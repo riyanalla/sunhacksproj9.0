@@ -11,4 +11,3 @@ webrtcvad-wheels
 librosa
 scipy
 torch
-argostranslate

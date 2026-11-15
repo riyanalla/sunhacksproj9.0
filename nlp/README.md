@@ -1,7 +1,7 @@
-# nlp: live captions, course vocabulary, translation, speaker labels
+# nlp: live captions, course vocabulary, speaker labels
 
 Turns lecture audio into captions: transcribes with Whisper (faster-whisper, CPU), fixes
-course terms, labels the speaker, and can translate each caption into another language.
+course terms, and labels the speaker. (Translation happens in the web app.)
 
 ## Setup (Windows)
 
@@ -13,14 +13,12 @@ nlp\.venv\Scripts\activate
 pip install -r nlp\requirements.txt
 pip install resemblyzer --no-deps
 python -m nlp.download_model base          # cache Whisper while online (also: tiny.en)
-python -m nlp.translate es                 # cache any translation languages you want
 ```
 
 ## Live captions
 
 ```
 python -m nlp.live_test                    # live captions from the mic
-python -m nlp.live_test --translate es     # with Spanish preloaded
 python -m nlp.live_test --model tiny.en    # faster, less accurate
 python -m nlp.live_test --list-devices     # find your mic, then add --device N
 ```
@@ -28,14 +26,10 @@ python -m nlp.live_test --list-devices     # find your mic, then add --device N
 Once it says `Ready`, type a command and press Enter:
 
 ```
-start            begin captions (plain Enter also toggles start/stop)
-start spanish    captions + Spanish translation (french, hindi, es, ...; works mid-recording)
-start english    turn translation off
-stop             pause; whatever was said so far still gets transcribed
-quit             exit
+start    begin captions (plain Enter also toggles start/stop)
+stop     pause; whatever was said so far still gets transcribed
+quit     exit
 ```
-
-`python -m nlp.translate --list` shows every language available from English.
 
 ## Accuracy test (word error rate)
 
@@ -62,7 +56,6 @@ about 3-7% WER at 4-5x real time; `tiny.en` is faster but makes roughly twice th
    corrected to the spelling in `vocab.json`.
 4. **Speaker labels** (`label.py`): pause-based guess by default; voice-based after
    `python -m nlp.live_test enroll <name>` for each speaker (`--mode embed`).
-5. **Translation** (`translate.py`): offline English -> other language (Argos Translate).
 
 ## Handoff to Person 1 (ASR): `enhance()`
 
@@ -118,9 +111,6 @@ def on_frame(pcm_bytes):                     # 100 ms of 16 kHz int16 from the P
 Run Whisper off the thread that receives frames, so a slow chunk never blocks the audio,
 and call `chunker.flush()` when the session ends to caption the last few seconds.
 
-Translation (`Translator("es")(text)`, never raises) isn't in `PROTOCOL.md` yet; agree on
-a field with the team before sending it.
-
 ## Files
 
 | File | What it does |
@@ -130,7 +120,6 @@ a field with the team before sending it.
 | `vocab.py` | `build_hotwords()`, `fix_terms(text)`, `highlight_terms(text)`, `find_terms(text)` |
 | `asr.py` | `Transcriber`: the Whisper settings shared by live captions and the accuracy test |
 | `chunker.py` | `PauseChunker`: splits live audio into utterances at pauses |
-| `translate.py` | `Translator`: offline translation; `python -m nlp.translate --list` |
 | `label.py`, `speakers.py` | Speaker labels: pause-based, or voice fingerprints (resemblyzer) |
 | `live_test.py` | Live mic captions |
 | `wer.py`, `wer_test.py` | Word error rate scoring and the accuracy test |
