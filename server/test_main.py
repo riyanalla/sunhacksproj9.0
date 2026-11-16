@@ -22,6 +22,7 @@ class FakeDB(types.ModuleType):
     def reset(self):
         self.sessions, self.segments, self.slides = [], {}, {}
         self.users, self.auth_sessions = {}, {}
+        self.session_owners = {}
 
     def create_user(self, username, password_hash):
         if any(user["username"] == username for user in self.users.values()):
@@ -53,9 +54,10 @@ class FakeDB(types.ModuleType):
             user["level"] = user["xp"] // 50 + 1
         return user
 
-    def create_session(self, title=None):
+    def create_session(self, title=None, user_id=None):
         sid = str(ObjectId())
         self.sessions.append(sid)
+        self.session_owners[sid] = user_id
         return sid
 
     def list_sessions(self):
@@ -170,6 +172,17 @@ def test_create_session_and_latest():
     a = client.post("/sessions", json={"title": "Lecture 1"}).json()["session_id"]
     b = client.post("/sessions").json()["session_id"]
     assert ObjectId.is_valid(a) and client.get("/sessions/latest").json()["session_id"] == b
+    assert fake_db.session_owners[a] is None
+
+
+def test_authenticated_session_is_assigned_to_current_user():
+    user = client.post(
+        "/auth/register",
+        json={"username": "session-owner", "password": "secure-pass-123"},
+    ).json()
+    response = client.post("/sessions", json={"title": "Lecture"})
+    assert response.status_code == 200
+    assert fake_db.session_owners[response.json()["session_id"]] == user["id"]
 
 
 def test_mic_audio_becomes_saved_and_broadcast_captions(monkeypatch):

@@ -370,9 +370,13 @@ async def audio(ws: WebSocket, session_id: str):
 # ---- Sessions, transcript, slides, quiz, search -------------------------------------
 
 @app.post("/sessions")
-def new_session(body: dict | None = None):
+def new_session(request: Request, body: dict | None = None):
     # Create a lecture; its ID goes in the page link as ?s=<id>.
-    return {"session_id": db.create_session((body or {}).get("title"))}
+    title = (body or {}).get("title")
+    if title is not None and not isinstance(title, str):
+        raise HTTPException(status_code=422, detail="title must be a string")
+    user_id = str(_current_user(request)["_id"]) if request.cookies.get(AUTH_COOKIE) else None
+    return {"session_id": db.create_session(title, user_id)}
 
 @app.get("/sessions")
 def sessions():

@@ -143,9 +143,19 @@ def save_segment(message: dict) -> None:
     )
 
 
-def create_session(title: str | None = None) -> str:
+def create_session(title: str | None = None, user_id: str | None = None) -> str:
     """Create a lecture session and return its ID (used in URLs as ?s=<id>)."""
-    result = _sessions.insert_one({"title": title, "created_at": datetime.now(timezone.utc)})
+    now = datetime.now(timezone.utc)
+    owner_id = ObjectId(user_id) if user_id else ObjectId()
+    session = {
+        "user_id": owner_id,
+        "title": title.strip() if isinstance(title, str) and title.strip() else "Untitled lecture",
+        "started_at": now,
+        "ended_at": None,
+        "status": "active",
+        "created_at": now,
+    }
+    result = _sessions.insert_one(session)
     return str(result.inserted_id)
 
 
